@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>星梦小铺</title>
+<style>
+  /* 全局设置为手机竖屏居中 */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #1a1a1a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    touch-action: manipulation; /* 禁止双击放大 */
+  }
+  #game {
+    width: 100%;
+    max-width: 420px;
+    height: 100vh;
+    max-height: 750px;
+    background: #d2b48c;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+  }
+  /* 所有场景共用 */
+  .scene { display:none; flex-direction:column; height:100%; }
+  .scene.active { display:flex; }
+
+  /* 顶部状态栏 */
+  .top-bar {
+    background: #8b7355;
+    color: gold;
+    padding: 12px 15px;
+    font-size: 20px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    min-height: 50px;
+  }
+  .top-bar span { font-size: 22px; }
+
+  /* 内容区可滚动 */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* 店铺背景图（可替换） */
+  .shop-bg, .forest-bg {
+    width: 100%;
+    height: 200px;
+    background: #e6d5b8;
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 15px;
+    background-size: cover;
+    background-position: center;
+  }
+  /* 如果有图片就用图片，否则显示默认色块 */
+  .shop-bg.has-bg { background-color: transparent; }
+  .forest-bg.has-bg { background-color: transparent; }
+
+  .player-area {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+  }
+  .player-img {
+    width: 60px;
+    height: 80px;
+    background: #f5cba7;
+    border-radius: 8px;
+  }
+  .player-img.has-bg { background: transparent; }
+
+  .stock-panel {
+    background: #fff8e7;
+    border-radius: 12px;
+    padding: 12px;
+    width: 100%;
+    margin-bottom: 15px;
+  }
+  .stock-panel p { margin: 5px 0; font-size: 18px; color: #5c3a21; }
+
+  .btn-row {
+    display: flex;
+    gap: 15px;
+    width: 100%;
+    margin-top: auto;
+    flex-shrink: 0;
+    padding: 0 15px 20px;
+  }
+  .btn {
+    flex:1;
+    padding: 18px 0;
+    border: none;
+    border-radius: 16px;
+    font-size: 22px;
+    font-weight: bold;
+    color: white;
+    background: #6b8e23;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    transition: transform 0.1s;
+  }
+  .btn:active { transform: scale(0.95); }
+  .btn.craft { background: #4caf50; }
+  .btn.explore { background: #2196f3; }
+
+  /* 制作台界面 */
+  .materials {
+    background: #eee;
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 15px;
+    width: 100%;
+    font-size: 18px;
+  }
+  .recipe-card {
+    background: #f0e0c0;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 12px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .recipe-card:active { background: #d2b48c; }
+  .recipe-name { font-size: 22px; font-weight: bold; color: #4a2c0a; }
+  .recipe-info { font-size: 16px; color: #7a5c3a; }
+
+  /* 探险界面 */
+  .forest-content {
+    width: 100%;
+    height: 250px;
+    background: #5a8f3c;
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 15px;
+    background-size: cover;
+    background-position: center;
+  }
+  .forest-content.has-bg { background-color: transparent; }
+  .gather-btn {
+    background: #8b4513;
+    color: white;
+    padding: 18px;
+    border-radius: 16px;
+    font-size: 24px;
+    text-align: center;
+    width: 100%;
+    margin-bottom: 15px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  }
+  .gather-btn:active { background: #6b3410; }
+  .back-btn {
+    background: #aaa;
+    padding: 15px;
+    border-radius: 12px;
+    font-size: 20px;
+    text-align: center;
+    color: white;
+    cursor: pointer;
+  }
+  .back-btn:active { background: #888; }
+</style>
+</head>
+<body>
+<div id="game">
+
+  <!-- ========== 店铺场景 ========== -->
+  <div id="scene-shop" class="scene active">
+    <div class="top-bar">
+      <span>🏠 星梦小铺</span>
+      <span style="margin-left:auto;">💰 <span id="gold-display">100</span></span>
+    </div>
+    <div class="content">
+      <div id="shop-bg-img" class="shop-bg">（店铺背景）</div>
+      <div class="player-area">
+        <img id="player-img" class="player-img" src="" alt="" style="display:none;">
+      </div>
+      <div class="stock-panel" id="stock-panel">
+        <p>📦 货架库存</p>
+        <div id="stock-list"></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn craft" id="btn-craft">🔨 制作</button>
+      <button class="btn explore" id="btn-explore">🌲 探险</button>
+    </div>
+  </div>
+
+  <!-- ========== 制作台场景 ========== -->
+  <div id="scene-craft" class="scene">
+    <div class="top-bar">
+      <span>🔨 制作台</span>
+      <span style="margin-left:auto;">💰 <span id="gold-craft">100</span></span>
+    </div>
+    <div class="content">
+      <div class="materials" id="materials-display"></div>
+      <div id="recipe-list"></div>
+    </div>
+    <div class="btn-row">
+      <button class="back-btn" id="btn-back-craft">🔙 回店铺</button>
+    </div>
+  </div>
+
+  <!-- ========== 探险场景 ========== -->
+  <div id="scene-explore" class="scene">
+    <div class="top-bar">
+      <span>🌲 星语森林</span>
+      <span style="margin-left:auto;">💰 <span id="gold-explore">100</span></span>
+    </div>
+    <div class="content">
+      <div id="forest-bg-img" class="forest-content">（森林背景）</div>
+      <div class="materials" id="explore-materials"></div>
+      <div class="gather-btn" id="btn-gather">⛏️ 采集一次</div>
+    </div>
+    <div class="btn-row">
+      <button class="back-btn" id="btn-back-explore">🔙 回店铺</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ==================== 游戏数据 ====================
+let gold = 100;
+let materials = {
+  "糖": 5,
+  "面粉": 5,
+  "浆果": 3
+};
+let stock = {
+  "草莓蛋糕": 0,
+  "曲奇饼干": 0,
+  "果汁": 0
+};
+const recipes = {
+  "草莓蛋糕": { needs: { "糖":2, "浆果":2 }, price: 30 },
+  "曲奇饼干": { needs: { "面粉":3, "糖":1 }, price: 15 },
+  "果汁":      { needs: { "浆果":3 }, price: 20 }
+};
+
+// ==================== 界面切换 ====================
+function showScene(sceneId) {
+  document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+  document.getElementById('scene-' + sceneId).classList.add('active');
+  updateAllUI();
+}
+
+// 按钮事件
+document.getElementById('btn-craft').addEventListener('click', () => showScene('craft'));
+document.getElementById('btn-explore').addEventListener('click', () => showScene('explore'));
+document.getElementById('btn-back-craft').addEventListener('click', () => showScene('shop'));
+document.getElementById('btn-back-explore').addEventListener('click', () => showScene('shop'));
+
+// 采集按钮
+document.getElementById('btn-gather').addEventListener('click', () => {
+  let mat = ["糖", "面粉", "浆果"][Math.floor(Math.random() * 3)];
+  let amount = Math.floor(Math.random() * 3) + 1;
+  materials[mat] += amount;
+  updateAllUI();
+});
+
+// ==================== 制作逻辑 ====================
+function craftItem(recipeName) {
+  let recipe = recipes[recipeName];
+  let canCraft = true;
+  for (let [mat, num] of Object.entries(recipe.needs)) {
+    if (materials[mat] < num) {
+      canCraft = false;
+      break;
+    }
+  }
+  if (canCraft) {
+    for (let [mat, num] of Object.entries(recipe.needs)) {
+      materials[mat] -= num;
+    }
+    stock[recipeName] += 1;
+    updateAllUI();
+  } else {
+    alert("材料不足！");
+  }
+}
+
+// 动态生成食谱按钮
+function renderRecipes() {
+  let container = document.getElementById('recipe-list');
+  container.innerHTML = '';
+  for (let [name, data] of Object.entries(recipes)) {
+    let needStr = Object.entries(data.needs).map(([m,n]) => `${m}x${n}`).join(' ');
+    let card = document.createElement('div');
+    card.className = 'recipe-card';
+    card.innerHTML = `
+      <div class="recipe-name">${name}</div>
+      <div class="recipe-info">所需：${needStr}　售价：${data.price}G</div>
+    `;
+    card.addEventListener('click', () => craftItem(name));
+    container.appendChild(card);
+  }
+}
+
+// ==================== 自动售卖（每2秒） ====================
+setInterval(() => {
+  let available = Object.entries(stock).filter(([_, qty]) => qty > 0);
+  if (available.length > 0) {
+    let [item, qty] = available[Math.floor(Math.random() * available.length)];
+    let price = recipes[item].price;
+    gold += price;
+    stock[item] -= 1;
+    updateAllUI();
+  }
+}, 2000);
+
+// ==================== UI 更新 ====================
+function updateAllUI() {
+  // 金币
+  document.querySelectorAll('[id^="gold-"]').forEach(el => el.textContent = gold);
+  // 材料
+  let matStr = Object.entries(materials).map(([m,n]) => `${m}：${n}`).join('　');
+  document.getElementById('materials-display').textContent = `材料：${matStr}`;
+  document.getElementById('explore-materials').textContent = `当前材料：${matStr}`;
+  // 库存
+  let stockDiv = document.getElementById('stock-list');
+  stockDiv.innerHTML = '';
+  for (let [item, qty] of Object.entries(stock)) {
+    stockDiv.innerHTML += `<p>${item}：${qty} 个</p>`;
+  }
+}
+updateAllUI();
+renderRecipes();
+
+// ==================== 素材替换（自动检测图片是否存在） ====================
+function tryLoadImage(selector, src, bgClass = null) {
+  let img = new Image();
+  img.onload = function() {
+    let el = document.querySelector(selector);
+    if (el.tagName === 'IMG') {
+      el.src = src;
+      el.style.display = 'block';
+    } else {
+      el.style.backgroundImage = `url('${src}')`;
+      if (bgClass) el.classList.add(bgClass);
+    }
+  };
+  img.src = src;
+}
+
+// 尝试加载图片（路径相对于当前HTML）
+tryLoadImage('#shop-bg-img', 'images/shop_bg.png', 'has-bg');
+tryLoadImage('#player-img', 'images/player.png');
+tryLoadImage('#forest-bg-img', 'images/forest_bg.png', 'has-bg');
+
+// 如果没有加载成功，保留默认样式（彩色方块）
+</script>
+</body>
+</html>
