@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, touch-action: none">
-  <title>星塔之下：织链者 · GIF翻转</title>
+  <title>星塔之下：织链者</title>
   <style>
     * {
       margin: 0; padding: 0; box-sizing: border-box;
@@ -13,7 +13,9 @@
       background: #1a1a2e;
       display: flex; justify-content: center; align-items: center;
       min-height: 100vh;
-      font-family: 'Courier New', monospace; touch-action: none;
+      font-family: 'Courier New', monospace;
+      touch-action: none;
+      overscroll-behavior: none;
     }
     .game-container {
       position: relative; width: 100%; max-width: 400px; aspect-ratio: 9 / 16;
@@ -50,8 +52,22 @@
     .upgrade-btn:active { transform: translateY(2px); border-bottom-width: 1px; }
     .enter-tower-btn { background: #f0c060; border: none; color: #1a1a2e; padding: 14px; border-radius: 30px; font-weight: bold; font-size: 1.3rem; margin-top: 5px; cursor: pointer; border-bottom: 4px solid #b09040; letter-spacing: 2px; touch-action: manipulation; }
 
-    .battle-canvas-container { flex: 1; position: relative; touch-action: none; background: #1a1a2e; }
-    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .battle-canvas-container { flex: 1; position: relative; touch-action: none; background: #1a1a2e; overflow: hidden; }
+    canvas#gameCanvas { display: block; width: 100%; height: 100%; touch-action: none; pointer-events: none; }
+
+    /* 🔧修改点1：摇杆Canvas样式 - 固定在底部左侧，半透明 */
+    canvas#joystickCanvas {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 140px;
+      height: 140px;
+      z-index: 8;
+      touch-action: none;
+      cursor: pointer;
+      /* 半透明由Canvas内rgba实现，这里不做额外opacity */
+    }
+
     .battle-ui-overlay {
       position: absolute; top: 8px; left: 8px; right: 8px;
       display: flex; flex-direction: column; gap: 4px; color: white; font-size: 0.8rem; z-index: 5; pointer-events: none;
@@ -61,17 +77,20 @@
     .hp-bar-fill { height: 100%; background: #c04040; border-radius: 5px; width: 100%; }
     .mana-bar-fill { height: 100%; background: #4060c0; border-radius: 5px; width: 100%; }
     .progress-row { display: flex; justify-content: space-between; font-size: 0.7rem; }
+
+    /* 🔧修改点2：技能按钮放在底部右侧 */
     .skill-btn-overlay {
-      position: absolute; bottom: 16px; left: 16px; right: 16px;
-      display: flex; justify-content: center; gap: 12px; z-index: 10;
+      position: absolute; bottom: 40px; right: 16px;
+      display: flex; flex-direction: column; gap: 10px; z-index: 10;
     }
     .skill-btn {
-      background: #3d2b5a; border: 2px solid #7a6a9a; color: #e0e0ff;
-      padding: 12px 20px; border-radius: 30px; font-weight: bold; font-size: 0.9rem;
+      background: rgba(61, 43, 90, 0.85); border: 2px solid #7a6a9a; color: #e0e0ff;
+      padding: 14px 18px; border-radius: 30px; font-weight: bold; font-size: 0.85rem;
       cursor: pointer; touch-action: manipulation; pointer-events: auto;
+      white-space: nowrap;
     }
     .skill-btn:active { background: #5e4a7a; }
-    .skill-btn.cooldown { opacity: 0.5; pointer-events: none; }
+    .skill-btn.cooldown { opacity: 0.4; pointer-events: none; }
 
     .upgrade-panel {
       position: absolute; bottom: 80px; left: 10px; right: 10px;
@@ -94,7 +113,7 @@
     .result-panel { background: rgba(20, 10, 40, 0.95); border: 2px solid #7a6a9a; border-radius: 24px; padding: 20px; text-align: center; color: white; margin: 20px; }
     .result-btn { background: #f0c060; border: none; color: #1a1a2e; padding: 12px 24px; border-radius: 30px; font-weight: bold; margin-top: 15px; cursor: pointer; border-bottom: 4px solid #b09040; touch-action: manipulation; }
 
-    /* 🔧修改点1：确保翻转时以图片中心为轴 */
+    /* 🔧修改点3：角色GIF样式 */
     #playerGif {
       position: absolute;
       pointer-events: none;
@@ -128,7 +147,11 @@
   <div id="battleScreen" class="screen">
     <div class="battle-canvas-container" id="canvasContainer">
       <canvas id="gameCanvas"></canvas>
-      <!-- 🔧修改点2：角色GIF标签 -->
+      
+      <!-- 🔧修改点4：虚拟摇杆Canvas -->
+      <canvas id="joystickCanvas"></canvas>
+      
+      <!-- 角色GIF -->
       <img id="playerGif" src="" alt="hero" style="width:40px; height:40px;" />
       
       <div class="battle-ui-overlay">
@@ -167,12 +190,12 @@
 
 <script>
   (function() {
-    // ==================== 🔧修改点3：资源路径 ====================
+    // ==================== 🔧修改点5：资源路径 ====================
     const ASSETS = {
-      idleGif: 'zhan.gif',   // 待机动画
-      runGif: 'pao.gif',     // 跑步动画
-      playerWidth: 40,
-      playerHeight: 40,
+      idleGif: 'zhan.gif',
+      runGif: 'pao.gif',
+      playerWidth: 60,
+      playerHeight: 60,
     };
     // ===========================================================
 
@@ -191,15 +214,23 @@
       },
       battle: {
         active: false, paused: false, enemies: [], bullets: [], damageNumbers: [], skillEffects: [],
-        playerWorldX: 0, playerWorldY: 0, targetWorldX: 0, targetWorldY: 0, isMoving: false,
+        playerWorldX: 0, playerWorldY: 0, isMoving: false,
         killCount: 0, killTarget: 15, lastTime: 0,
         canvasWidth: 0, canvasHeight: 0, worldWidth: 1600, worldHeight: 2400,
         invincibleTimer: 0, tempAtk: 0, tempSkillDmg: 0, tempBulletCount: 1, tempBulletDmg: 0, tempMoveSpeed: 0,
         nextUpgradeKills: 5, maxEnemies: 5, _attackTimer: 0, skillCooldownTimer: 0,
-        /* 🔧修改点4：增加朝向记录 */
         facingRight: true
       },
       upgradeCosts: { hp: 20, atk: 20, speed: 25, cooldown: 30, mana: 25 }
+    };
+
+    // 🔧修改点6：摇杆状态
+    const joystick = {
+      active: false,
+      dx: 0,        // 归一化方向 (-1 ~ 1)
+      dy: 0,
+      distance: 0,  // 力度 (0 ~ 1)
+      touchId: null // 追踪触摸点ID
     };
 
     const screens = {
@@ -213,7 +244,189 @@
     }
 
     const playerGif = document.getElementById('playerGif');
+    const joystickCanvas = document.getElementById('joystickCanvas');
+    const jctx = joystickCanvas.getContext('2d');
 
+    // 🔧修改点7：摇杆几何参数
+    const JOYSTICK = {
+      size: 140,        // Canvas尺寸
+      centerX: 70,      // 背景圆心X
+      centerY: 70,      // 背景圆心Y
+      bgRadius: 55,     // 背景圆半径
+      knobRadius: 24,   // 手柄圆半径
+      maxOffset: 31     // 最大偏移 = bgRadius - knobRadius
+    };
+
+    function initJoystickCanvas() {
+      joystickCanvas.width = JOYSTICK.size;
+      joystickCanvas.height = JOYSTICK.size;
+      drawJoystick(0, 0, false);
+    }
+
+    // 🔧修改点8：绘制摇杆
+    function drawJoystick(knobX, knobY, active) {
+      const ctx = jctx;
+      const cx = JOYSTICK.centerX;
+      const cy = JOYSTICK.centerY;
+      ctx.clearRect(0, 0, JOYSTICK.size, JOYSTICK.size);
+
+      // 背景圆（半透明）
+      ctx.beginPath();
+      ctx.arc(cx, cy, JOYSTICK.bgRadius, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 十字参考线
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - JOYSTICK.bgRadius + 5, cy);
+      ctx.lineTo(cx + JOYSTICK.bgRadius - 5, cy);
+      ctx.moveTo(cx, cy - JOYSTICK.bgRadius + 5);
+      ctx.lineTo(cx, cy + JOYSTICK.bgRadius - 5);
+      ctx.stroke();
+
+      // 手柄
+      const kx = active ? cx + knobX : cx;
+      const ky = active ? cy + knobY : cy;
+      ctx.beginPath();
+      ctx.arc(kx, ky, JOYSTICK.knobRadius, 0, Math.PI * 2);
+      ctx.fillStyle = active ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.25)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 内圈高光
+      ctx.beginPath();
+      ctx.arc(kx, ky, JOYSTICK.knobRadius * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = active ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.15)';
+      ctx.fill();
+    }
+
+    // 🔧修改点9：摇杆事件处理
+    function getJoystickPos(e) {
+      const rect = joystickCanvas.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    function updateJoystickFromPos(posX, posY) {
+      const cx = JOYSTICK.centerX;
+      const cy = JOYSTICK.centerY;
+      let dx = posX - cx;
+      let dy = posY - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const maxOff = JOYSTICK.maxOffset;
+
+      if (dist > maxOff) {
+        dx = (dx / dist) * maxOff;
+        dy = (dy / dist) * maxOff;
+      }
+
+      const clampedDist = Math.min(dist, maxOff);
+      joystick.dx = maxOff > 0 ? dx / maxOff : 0;
+      joystick.dy = maxOff > 0 ? dy / maxOff : 0;
+      joystick.distance = maxOff > 0 ? clampedDist / maxOff : 0;
+      joystick.active = true;
+
+      drawJoystick(dx, dy, true);
+    }
+
+    function resetJoystick() {
+      joystick.active = false;
+      joystick.dx = 0;
+      joystick.dy = 0;
+      joystick.distance = 0;
+      joystick.touchId = null;
+      drawJoystick(0, 0, false);
+    }
+
+    function onJoystickStart(e) {
+      e.preventDefault();
+      if (!battleRunning || GameState.battle.paused) return;
+      const pos = e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+      const rect = joystickCanvas.getBoundingClientRect();
+      const localX = pos.x - rect.left;
+      const localY = pos.y - rect.top;
+      if (e.touches && e.touches.length > 0) {
+        joystick.touchId = e.touches[0].identifier;
+      }
+      updateJoystickFromPos(localX, localY);
+    }
+
+    function onJoystickMove(e) {
+      e.preventDefault();
+      if (!battleRunning || GameState.battle.paused) return;
+      if (!joystick.active && !e.touches) return;
+      let pos;
+      if (e.touches) {
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].identifier === joystick.touchId) {
+            pos = { x: e.touches[i].clientX, y: e.touches[i].clientY };
+            break;
+          }
+        }
+        if (!pos && joystick.touchId !== null) return;
+        if (!pos && joystick.touchId === null && e.touches.length > 0) {
+          pos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          joystick.touchId = e.touches[0].identifier;
+        }
+      } else {
+        if (!joystick.active) return;
+        pos = { x: e.clientX, y: e.clientY };
+      }
+      if (!pos) return;
+      const rect = joystickCanvas.getBoundingClientRect();
+      const localX = pos.x - rect.left;
+      const localY = pos.y - rect.top;
+      updateJoystickFromPos(localX, localY);
+    }
+
+    function onJoystickEnd(e) {
+      e.preventDefault();
+      if (e.touches && e.touches.length === 0) {
+        resetJoystick();
+      } else if (!e.touches) {
+        resetJoystick();
+      } else if (e.touches) {
+        let found = false;
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].identifier === joystick.touchId) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) resetJoystick();
+      }
+    }
+
+    function bindJoystickEvents() {
+      joystickCanvas.addEventListener('touchstart', onJoystickStart, { passive: false });
+      joystickCanvas.addEventListener('touchmove', onJoystickMove, { passive: false });
+      joystickCanvas.addEventListener('touchend', onJoystickEnd);
+      joystickCanvas.addEventListener('touchcancel', onJoystickEnd);
+      joystickCanvas.addEventListener('mousedown', onJoystickStart);
+      window.addEventListener('mousemove', onJoystickMove);
+      window.addEventListener('mouseup', onJoystickEnd);
+    }
+
+    function unbindJoystickEvents() {
+      joystickCanvas.removeEventListener('touchstart', onJoystickStart);
+      joystickCanvas.removeEventListener('touchmove', onJoystickMove);
+      joystickCanvas.removeEventListener('touchend', onJoystickEnd);
+      joystickCanvas.removeEventListener('touchcancel', onJoystickEnd);
+      joystickCanvas.removeEventListener('mousedown', onJoystickStart);
+      window.removeEventListener('mousemove', onJoystickMove);
+      window.removeEventListener('mouseup', onJoystickEnd);
+    }
+
+    // ---------- 基地界面 ----------
     function renderBase() {
       document.getElementById('bgLayer').style.background = 'linear-gradient(180deg, #1e1e3a 0%, #2a1e3a 100%)';
       document.getElementById('resData').textContent = GameState.resources.data;
@@ -253,6 +466,7 @@
       } else alert('数据不足');
     }
 
+    // ---------- 战斗系统 ----------
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     let animFrameId, battleRunning = false;
@@ -272,7 +486,6 @@
       const b = GameState.battle;
       b.worldWidth = 1600; b.worldHeight = 2400;
       b.playerWorldX = b.worldWidth/2; b.playerWorldY = b.worldHeight/2;
-      b.targetWorldX = b.playerWorldX; b.targetWorldY = b.playerWorldY;
       b.enemies = []; b.bullets = []; b.damageNumbers = []; b.skillEffects = [];
       b.killCount = 0; b.killTarget = 15;
       b.invincibleTimer = 0; b._attackTimer = 0; b.isMoving = false; b.paused = false;
@@ -287,21 +500,24 @@
       playerGif.style.width = ASSETS.playerWidth + 'px';
       playerGif.style.height = ASSETS.playerHeight + 'px';
       playerGif.src = ASSETS.idleGif;
-      /* 🔧修改点5：初始化朝向和翻转 */
       b.facingRight = true;
       playerGif.style.transform = 'scaleX(1)';
+      
+      resetJoystick();
+      initJoystickCanvas();
       
       updateBattleUI();
       document.getElementById('upgradePanel').style.display = 'none';
       if (animFrameId) cancelAnimationFrame(animFrameId);
-      bindMovementEvents();
+      bindJoystickEvents();
       gameLoop(performance.now());
     }
 
     function endBattle(victory) {
       battleRunning = false;
       if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
-      unbindMovementEvents();
+      unbindJoystickEvents();
+      resetJoystick();
       playerGif.style.display = 'none';
       const kills = GameState.battle.killCount;
       let dataReward = kills * 2, coreReward = 0;
@@ -446,44 +662,9 @@
       panel.style.display = 'flex';
     }
 
-    // 移动事件
-    function handleStart(e) {
-      e.preventDefault();
-      if (!battleRunning || GameState.battle.paused) return;
-      const rect = canvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const canvasX = clientX - rect.left, canvasY = clientY - rect.top;
-      const b = GameState.battle;
-      const offsetX = b.playerWorldX - b.canvasWidth/2;
-      const offsetY = b.playerWorldY - b.canvasHeight/2;
-      b.targetWorldX = offsetX + canvasX; b.targetWorldY = offsetY + canvasY;
-      b.isMoving = true;
-    }
-    function handleMove(e) {
-      e.preventDefault();
-      if (!battleRunning || GameState.battle.paused || !GameState.battle.isMoving) return;
-      const rect = canvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const canvasX = clientX - rect.left, canvasY = clientY - rect.top;
-      const b = GameState.battle;
-      const offsetX = b.playerWorldX - b.canvasWidth/2;
-      const offsetY = b.playerWorldY - b.canvasHeight/2;
-      b.targetWorldX = offsetX + canvasX; b.targetWorldY = offsetY + canvasY;
-    }
-    function handleEnd(e) { e.preventDefault(); GameState.battle.isMoving = false; }
-    function bindMovementEvents() {
-      canvas.addEventListener('mousedown', handleStart); canvas.addEventListener('mousemove', handleMove); canvas.addEventListener('mouseup', handleEnd);
-      canvas.addEventListener('touchstart', handleStart, {passive: false}); canvas.addEventListener('touchmove', handleMove, {passive: false}); canvas.addEventListener('touchend', handleEnd);
-    }
-    function unbindMovementEvents() {
-      canvas.removeEventListener('mousedown', handleStart); canvas.removeEventListener('mousemove', handleMove); canvas.removeEventListener('mouseup', handleEnd);
-      canvas.removeEventListener('touchstart', handleStart); canvas.removeEventListener('touchmove', handleMove); canvas.removeEventListener('touchend', handleEnd);
-    }
-
     document.getElementById('skill1Btn').addEventListener('click', castSkill);
 
+    // 🔧修改点10：游戏循环 - 使用摇杆状态移动角色
     function gameLoop(timestamp) {
       if (!battleRunning) return;
       const b = GameState.battle;
@@ -491,24 +672,21 @@
       const dt = Math.min(0.1, (timestamp - b.lastTime)/1000);
       b.lastTime = timestamp;
 
-      if (b.isMoving) {
-        const dx = b.targetWorldX - b.playerWorldX, dy = b.targetWorldY - b.playerWorldY;
-        const dist = Math.sqrt(dx*dx+dy*dy);
-        const speed = (GameState.player.moveSpeed + b.tempMoveSpeed) * 60 * dt;
-        if (dist > 2) {
-          b.playerWorldX += (dx/dist) * Math.min(speed, dist);
-          b.playerWorldY += (dy/dist) * Math.min(speed, dist);
-        }
+      // 摇杆移动
+      if (joystick.active && joystick.distance > 0.05) {
+        const speed = (GameState.player.moveSpeed + b.tempMoveSpeed) * joystick.distance * 60 * dt;
+        b.playerWorldX += joystick.dx * speed;
+        b.playerWorldY += joystick.dy * speed;
+        b.isMoving = true;
+      } else {
+        b.isMoving = false;
       }
       b.playerWorldX = Math.max(20, Math.min(b.playerWorldX, b.worldWidth-20));
       b.playerWorldY = Math.max(20, Math.min(b.playerWorldY, b.worldHeight-20));
 
-      /* 🔧修改点6：移动时根据水平移动方向翻转角色 */
-      if (b.isMoving) {
-        const moveDirX = b.targetWorldX - b.playerWorldX;
-        if (Math.abs(moveDirX) > 0.5) {
-          b.facingRight = moveDirX > 0;
-        }
+      // 方向翻转
+      if (joystick.active && Math.abs(joystick.dx) > 0.1) {
+        b.facingRight = joystick.dx > 0;
       }
       playerGif.style.transform = `scaleX(${b.facingRight ? 1 : -1})`;
 
@@ -644,6 +822,8 @@
 
     document.getElementById('enterTowerBtn').addEventListener('click', startBattle);
     window.addEventListener('resize', ()=>{ if (battleRunning) resizeCanvas(); });
+    
+    initJoystickCanvas();
     renderBase();
     showScreen('base');
   })();
