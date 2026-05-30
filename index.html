@@ -3,377 +3,429 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>星梦小铺</title>
+<title>星梦小铺 · 梦幻经营</title>
 <style>
-  /* 全局设置为手机竖屏居中 */
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    background: #1a1a1a;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-    touch-action: manipulation; /* 禁止双击放大 */
-  }
-  #game {
-    width: 100%;
-    max-width: 420px;
-    height: 100vh;
-    max-height: 750px;
-    background: #d2b48c;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-  }
-  /* 所有场景共用 */
-  .scene { display:none; flex-direction:column; height:100%; }
-  .scene.active { display:flex; }
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+  body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Segoe UI', 'PingFang SC', Roboto, sans-serif; touch-action: manipulation; }
+  #game { width: 100%; max-width: 450px; height: 100vh; max-height: 780px; background: #fef3e2; position: relative; overflow: hidden; border-radius: 28px; box-shadow: 0 20px 35px rgba(0,0,0,0.4); display: flex; flex-direction: column; }
+  .scene { display: none; flex-direction: column; height: 100%; background: #fef3e2; overflow-y: auto; }
+  .scene.active { display: flex; }
 
-  /* 顶部状态栏 */
-  .top-bar {
-    background: #8b7355;
-    color: gold;
-    padding: 12px 15px;
-    font-size: 20px;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-    min-height: 50px;
-  }
-  .top-bar span { font-size: 22px; }
+  /* 顶部栏 */
+  .top-bar { background: linear-gradient(135deg, #c27e4a, #9b5a2c); color: #fff3c9; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; font-weight: bold; font-size: 16px; flex-shrink: 0; border-bottom: 3px solid #ffd966; }
+  .stat-group { display: flex; gap: 12px; background: #4e2e1a80; padding: 4px 12px; border-radius: 40px; }
+  /* 体力横向固定布局 */
+  .stamina-row { display: flex; align-items: center; gap: 8px; background: #2c5a2e; padding: 4px 12px; border-radius: 30px; font-size: 14px; }
+  .stamina-row span { font-weight: bold; }
+  .stamina-timer { font-size: 11px; background: #1e3a1e; padding: 2px 8px; border-radius: 20px; margin-left: 4px; }
 
-  /* 内容区可滚动 */
-  .content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
+  .content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: #fffaf0; border-radius: 28px; padding: 14px; box-shadow: 0 6px 12px rgba(0,0,0,0.08); border: 1px solid #f3d9b1; }
+  .btn { background: #e2b87a; border: none; padding: 12px 0; border-radius: 60px; font-weight: bold; font-size: 18px; color: #3b2a1f; text-align: center; cursor: pointer; transition: 0.07s linear; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
+  .btn:active { transform: scale(0.96); background: #cf9f5a; }
+  .btn-primary { background: #7c9c4d; color: white; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .exp-bar { background: #cfb284; border-radius: 20px; height: 12px; overflow: hidden; margin: 6px 0; }
+  .exp-fill { background: #ffb347; width: 0%; height: 100%; transition: width 0.3s ease; }
 
-  /* 店铺背景图（可替换） */
-  .shop-bg, .forest-bg {
-    width: 100%;
-    height: 200px;
-    background: #e6d5b8;
-    border-radius: 12px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 15px;
-    background-size: cover;
-    background-position: center;
-  }
-  /* 如果有图片就用图片，否则显示默认色块 */
-  .shop-bg.has-bg { background-color: transparent; }
-  .forest-bg.has-bg { background-color: transparent; }
+  /* 货架 */
+  .shelf-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 8px 0; }
+  .shelf-slot { background: #ecd9b4; border-radius: 20px; padding: 12px 6px; text-align: center; border: 2px solid #b97f4b; min-height: 85px; display: flex; flex-direction: column; justify-content: center; cursor: pointer; transition: 0.05s; }
+  .slot-empty { opacity: 0.6; background: #eedbbc; border: 2px dashed #a26734; }
+  .item-quality { font-size: 12px; padding: 2px 6px; border-radius: 20px; display: inline-block; margin-top: 4px; }
+  .quality-普通 { background: #b0b0b0; color: #2c2c2c; }
+  .quality-高级 { background: #5f9e6e; color: white; }
+  .quality-极品 { background: #3c8dbc; color: white; }
+  .quality-绝品 { background: #9b59b6; color: white; }
+  .quality-仙品 { background: #e67e22; color: #fff0c0; text-shadow:0 0 2px gold;}
 
-  .player-area {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 10px;
-  }
-  .player-img {
-    width: 60px;
-    height: 80px;
-    background: #f5cba7;
-    border-radius: 8px;
-  }
-  .player-img.has-bg { background: transparent; }
+  /* 客人队列 - 每个客人独立显示，无重复跳动 */
+  .visitor-queue { display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow-y: auto; }
+  .visitor-card { background: #fff0df; border-radius: 24px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-left: 8px solid #ffaa66; transition: 0.1s; }
+  .visitor-info { flex:1; }
+  .visitor-name { font-weight: bold; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .visitor-want { font-size: 12px; color: #9b6a3c; }
+  .visitor-timer { background: #efcba1; border-radius: 40px; padding: 4px 8px; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+  .timer-bar { width: 50px; height: 6px; background: #cdb38c; border-radius: 6px; overflow: hidden; }
+  .timer-fill { height: 100%; background: #e67e22; transition: width linear 0.2s; }
+  .mood-emoj { font-size: 18px; transition: none; } /* 无跳动动画 */
+  .sell-visitor-btn { background: #a5662c; color: white; border: none; border-radius: 30px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
 
-  .stock-panel {
-    background: #fff8e7;
-    border-radius: 12px;
-    padding: 12px;
-    width: 100%;
-    margin-bottom: 15px;
-  }
-  .stock-panel p { margin: 5px 0; font-size: 18px; color: #5c3a21; }
+  /* 探险界面 - 动态刷新不会重复构建动画 */
+  .explore-location-item { background: #e8dcc8; border-radius: 28px; margin-bottom: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .explore-name { font-weight: bold; font-size: 18px; }
+  .explore-desc { font-size: 12px; color: #7a5a3a; }
+  .explore-btn { background: #7c9c4d; padding: 8px 16px; border-radius: 40px; color: white; border: none; }
+  .explore-timer-card { background: #b6895c; color: white; border-radius: 28px; padding: 12px; text-align: center; margin-bottom: 12px; }
 
-  .btn-row {
-    display: flex;
-    gap: 15px;
-    width: 100%;
-    margin-top: auto;
-    flex-shrink: 0;
-    padding: 0 15px 20px;
-  }
-  .btn {
-    flex:1;
-    padding: 18px 0;
-    border: none;
-    border-radius: 16px;
-    font-size: 22px;
-    font-weight: bold;
-    color: white;
-    background: #6b8e23;
-    text-align: center;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    transition: transform 0.1s;
-  }
-  .btn:active { transform: scale(0.95); }
-  .btn.craft { background: #4caf50; }
-  .btn.explore { background: #2196f3; }
+  /* 底部固定按钮栏 */
+  .bottom-nav { display: flex; gap: 12px; padding: 12px 16px 20px; background: #fef3e2; border-top: 1px solid #f3d9b1; flex-shrink: 0; }
+  .bottom-nav .btn { flex: 1; font-size: 16px; padding: 12px 0; }
 
-  /* 制作台界面 */
-  .materials {
-    background: #eee;
-    border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 15px;
-    width: 100%;
-    font-size: 18px;
-  }
-  .recipe-card {
-    background: #f0e0c0;
-    border-radius: 12px;
-    padding: 15px;
-    margin-bottom: 12px;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-  .recipe-card:active { background: #d2b48c; }
-  .recipe-name { font-size: 22px; font-weight: bold; color: #4a2c0a; }
-  .recipe-info { font-size: 16px; color: #7a5c3a; }
+  /* 材料商店 - 一个商品占一排 */
+  .store-item-card { margin-bottom: 12px; }
+  .qty-control { display: flex; align-items: center; gap: 12px; background: #f0e1ce; padding: 6px 12px; border-radius: 40px; }
+  .qty-btn { background: #d9b88c; width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; cursor: pointer; transition: 0.05s; }
+  .qty-btn:active { transform: scale(0.9); background: #b97f4b; }
+  .total-price { font-weight: bold; color: #aa6f3c; }
 
-  /* 探险界面 */
-  .forest-content {
-    width: 100%;
-    height: 250px;
-    background: #5a8f3c;
-    border-radius: 12px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 15px;
-    background-size: cover;
-    background-position: center;
-  }
-  .forest-content.has-bg { background-color: transparent; }
-  .gather-btn {
-    background: #8b4513;
-    color: white;
-    padding: 18px;
-    border-radius: 16px;
-    font-size: 24px;
-    text-align: center;
-    width: 100%;
-    margin-bottom: 15px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-  }
-  .gather-btn:active { background: #6b3410; }
-  .back-btn {
-    background: #aaa;
-    padding: 15px;
-    border-radius: 12px;
-    font-size: 20px;
-    text-align: center;
-    color: white;
-    cursor: pointer;
-  }
-  .back-btn:active { background: #888; }
+  /* 小店等级整行图片框 */
+  .shop-level-fullrow { width: 100%; background: #e6d5b8; border-radius: 24px; padding: 12px; text-align: center; margin-bottom: 8px; border: 2px solid #ffd58c; }
+  .level-img { width: 80px; height: 80px; background: #e8c99e; border-radius: 40px; display: inline-flex; align-items: center; justify-content: center; font-size: 48px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: 0.2s; }
+
+  /* 弹窗居中加强边框 */
+  .modal-mask { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+  .modal-card { background: #fff5e8; width: 85%; max-width: 320px; border-radius: 48px; padding: 22px; text-align: center; border: 4px solid #ffcd94; box-shadow: 0 20px 30px rgba(0,0,0,0.3); animation: popIn 0.2s cubic-bezier(0.34,1.2,0.8,1); }
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #2e241fe6; backdrop-filter: blur(8px); color: #ffe6b3; padding: 8px 20px; border-radius: 60px; z-index: 1100; font-size: 14px; animation: fadeUp 0.2s; pointer-events: none; }
+  @keyframes popIn { 0% { transform: scale(0.9); opacity:0; } 100% { transform: scale(1); opacity:1; } }
+  @keyframes fadeUp { from { opacity:0; transform: translateX(-50%) translateY(15px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
 </style>
 </head>
 <body>
 <div id="game">
-
-  <!-- ========== 店铺场景 ========== -->
+  <!-- 店铺主场景 -->
   <div id="scene-shop" class="scene active">
     <div class="top-bar">
-      <span>🏠 星梦小铺</span>
-      <span style="margin-left:auto;">💰 <span id="gold-display">100</span></span>
+      <div>🏠 星梦小铺</div>
+      <div class="stat-group">💰<span id="gold-display">200</span></div>
+      <div class="stamina-row">⚡<span id="stamina-display">120</span>/<span id="max-stamina">120</span><span id="stamina-timer-text" class="stamina-timer">回体:--</span></div>
     </div>
     <div class="content">
-      <div id="shop-bg-img" class="shop-bg">（店铺背景）</div>
-      <div class="player-area">
-        <img id="player-img" class="player-img" src="" alt="" style="display:none;">
+      <!-- 小店等级整行框架 -->
+      <div class="shop-level-fullrow">
+        <div class="level-img" id="shop-level-img">🏪1</div>
+        <div style="margin-top: 6px; font-weight: bold;">小店 Lv.<span id="shop-level-num">1</span></div>
       </div>
-      <div class="stock-panel" id="stock-panel">
-        <p>📦 货架库存</p>
-        <div id="stock-list"></div>
+      <div class="flex-between"><span>📦 手工货架 (上限 <span id="shelf-max">2</span>)</span></div>
+      <div id="shelf-container" class="shelf-grid"></div>
+      <div class="card"><div class="flex-between"><span>👥 客人在店 (<span id="visitor-count">0</span>/5)</span><span>⏳ 3分钟离开</span></div>
+        <div id="visitor-queue-list" class="visitor-queue"></div>
       </div>
     </div>
-    <div class="btn-row">
-      <button class="btn craft" id="btn-craft">🔨 制作</button>
-      <button class="btn explore" id="btn-explore">🌲 探险</button>
+    <div class="bottom-nav">
+      <button class="btn" id="btn-craft">🔨 制作台</button>
+      <button class="btn" id="btn-explore">🌲 探险世界</button>
+      <button class="btn" id="btn-shop-store">🏪 材料商店</button>
+      <button class="btn" id="open-profile-btn">📋 店铺信息</button>
     </div>
   </div>
 
-  <!-- ========== 制作台场景 ========== -->
+  <!-- 制作台场景 -->
   <div id="scene-craft" class="scene">
-    <div class="top-bar">
-      <span>🔨 制作台</span>
-      <span style="margin-left:auto;">💰 <span id="gold-craft">100</span></span>
-    </div>
-    <div class="content">
-      <div class="materials" id="materials-display"></div>
-      <div id="recipe-list"></div>
-    </div>
-    <div class="btn-row">
-      <button class="back-btn" id="btn-back-craft">🔙 回店铺</button>
-    </div>
+    <div class="top-bar"><span>🔨 巧手制作</span><span>💰<span id="gold-craft">200</span> ⚡<span id="stamina-craft">120</span></span></div>
+    <div class="content"><div class="card">📦 材料仓库<br><span id="materials-display"></span></div><div id="cooking-status-area"></div><div id="recipe-list"></div></div>
+    <div class="bottom-nav"><button class="btn" id="btn-back-craft">🔙 回小铺</button></div>
   </div>
 
-  <!-- ========== 探险场景 ========== -->
+  <!-- 探险世界场景 -->
   <div id="scene-explore" class="scene">
-    <div class="top-bar">
-      <span>🌲 星语森林</span>
-      <span style="margin-left:auto;">💰 <span id="gold-explore">100</span></span>
-    </div>
-    <div class="content">
-      <div id="forest-bg-img" class="forest-content">（森林背景）</div>
-      <div class="materials" id="explore-materials"></div>
-      <div class="gather-btn" id="btn-gather">⛏️ 采集一次</div>
-    </div>
-    <div class="btn-row">
-      <button class="back-btn" id="btn-back-explore">🔙 回店铺</button>
-    </div>
+    <div class="top-bar"><span>🌲 星语森林</span><span>⚡<span id="stamina-explore">120</span> 💰<span id="gold-explore">200</span></span></div>
+    <div class="content"><div id="explore-locations-container"></div><div class="card">🎒 探险材料<br><span id="explore-materials"></span></div></div>
+    <div class="bottom-nav"><button class="btn" id="btn-back-explore">🔙 回小铺</button></div>
   </div>
 
+  <!-- 店铺信息界面 -->
+  <div id="scene-profile" class="scene">
+    <div class="top-bar"><span>📖 店铺信息</span><span>💰<span id="gold-profile">200</span></span></div>
+    <div class="content"><div class="card">🏪 小店等级 <b id="shop-level-info">1</b> ✨ 经验 <span id="shop-exp">0</span>/<span id="next-exp">100</span><div class="exp-bar"><div class="exp-fill" id="shop-exp-fill"></div></div></div>
+    <div class="card">🗺️ 探险等级 <b id="adventure-level">1</b> 🌟 经验 <span id="adv-exp">0</span>/<span id="adv-next-exp">100</span><div class="exp-bar"><div class="exp-fill" id="adv-exp-fill"></div></div></div>
+    <div class="card">⚡ 体力上限 <span id="max-stamina-profile">120</span> &nbsp;📦 货架上限 <span id="shelf-capacity">2</span><br>🎯 每升5级解锁新食谱&新探险</div>
+    <button class="btn" id="close-profile">✨ 返回小铺</button></div>
+  </div>
+
+  <!-- 材料商店 -->
+  <div id="scene-store" class="scene">
+    <div class="top-bar"><span>🏪 星光集市</span><span>💰<span id="gold-store">200</span></span></div>
+    <div class="content" id="store-items-list"></div>
+    <div class="bottom-nav"><button class="btn" id="close-store">🔙 回小铺</button></div>
+  </div>
 </div>
 
 <script>
-// ==================== 游戏数据 ====================
-let gold = 100;
-let materials = {
-  "糖": 5,
-  "面粉": 5,
-  "浆果": 3
-};
-let stock = {
-  "草莓蛋糕": 0,
-  "曲奇饼干": 0,
-  "果汁": 0
-};
-const recipes = {
-  "草莓蛋糕": { needs: { "糖":2, "浆果":2 }, price: 30 },
-  "曲奇饼干": { needs: { "面粉":3, "糖":1 }, price: 15 },
-  "果汁":      { needs: { "浆果":3 }, price: 20 }
-};
-
-// ==================== 界面切换 ====================
-function showScene(sceneId) {
-  document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
-  document.getElementById('scene-' + sceneId).classList.add('active');
-  updateAllUI();
-}
-
-// 按钮事件
-document.getElementById('btn-craft').addEventListener('click', () => showScene('craft'));
-document.getElementById('btn-explore').addEventListener('click', () => showScene('explore'));
-document.getElementById('btn-back-craft').addEventListener('click', () => showScene('shop'));
-document.getElementById('btn-back-explore').addEventListener('click', () => showScene('shop'));
-
-// 采集按钮
-document.getElementById('btn-gather').addEventListener('click', () => {
-  let mat = ["糖", "面粉", "浆果"][Math.floor(Math.random() * 3)];
-  let amount = Math.floor(Math.random() * 3) + 1;
-  materials[mat] += amount;
-  updateAllUI();
-});
-
-// ==================== 制作逻辑 ====================
-function craftItem(recipeName) {
-  let recipe = recipes[recipeName];
-  let canCraft = true;
-  for (let [mat, num] of Object.entries(recipe.needs)) {
-    if (materials[mat] < num) {
-      canCraft = false;
-      break;
-    }
-  }
-  if (canCraft) {
-    for (let [mat, num] of Object.entries(recipe.needs)) {
-      materials[mat] -= num;
-    }
-    stock[recipeName] += 1;
-    updateAllUI();
-  } else {
-    alert("材料不足！");
-  }
-}
-
-// 动态生成食谱按钮
-function renderRecipes() {
-  let container = document.getElementById('recipe-list');
-  container.innerHTML = '';
-  for (let [name, data] of Object.entries(recipes)) {
-    let needStr = Object.entries(data.needs).map(([m,n]) => `${m}x${n}`).join(' ');
-    let card = document.createElement('div');
-    card.className = 'recipe-card';
-    card.innerHTML = `
-      <div class="recipe-name">${name}</div>
-      <div class="recipe-info">所需：${needStr}　售价：${data.price}G</div>
-    `;
-    card.addEventListener('click', () => craftItem(name));
-    container.appendChild(card);
-  }
-}
-
-// ==================== 自动售卖（每2秒） ====================
-setInterval(() => {
-  let available = Object.entries(stock).filter(([_, qty]) => qty > 0);
-  if (available.length > 0) {
-    let [item, qty] = available[Math.floor(Math.random() * available.length)];
-    let price = recipes[item].price;
-    gold += price;
-    stock[item] -= 1;
-    updateAllUI();
-  }
-}, 2000);
-
-// ==================== UI 更新 ====================
-function updateAllUI() {
-  // 金币
-  document.querySelectorAll('[id^="gold-"]').forEach(el => el.textContent = gold);
-  // 材料
-  let matStr = Object.entries(materials).map(([m,n]) => `${m}：${n}`).join('　');
-  document.getElementById('materials-display').textContent = `材料：${matStr}`;
-  document.getElementById('explore-materials').textContent = `当前材料：${matStr}`;
-  // 库存
-  let stockDiv = document.getElementById('stock-list');
-  stockDiv.innerHTML = '';
-  for (let [item, qty] of Object.entries(stock)) {
-    stockDiv.innerHTML += `<p>${item}：${qty} 个</p>`;
-  }
-}
-updateAllUI();
-renderRecipes();
-
-// ==================== 素材替换（自动检测图片是否存在） ====================
-function tryLoadImage(selector, src, bgClass = null) {
-  let img = new Image();
-  img.onload = function() {
-    let el = document.querySelector(selector);
-    if (el.tagName === 'IMG') {
-      el.src = src;
-      el.style.display = 'block';
-    } else {
-      el.style.backgroundImage = `url('${src}')`;
-      if (bgClass) el.classList.add(bgClass);
-    }
+  // ------------------- 游戏核心 + localStorage -------------------
+  let gameData = {
+    gold: 200, stamina: 120, shopLevel: 1, shopExp: 0, adventureLevel: 1, adventureExp: 0,
+    materials: { "糖": 12, "面粉": 10, "浆果": 8, "星尘": 0, "幻梦露": 0, "神秘花瓣": 0 },
+    shelves: [], maxShelves: 2,
+    lastStaminaUpdate: Date.now()
   };
-  img.src = src;
-}
+  // 高级食谱
+  const advancedRecipesDB = {
+    5:  { name:"🍰 梦幻泡芙", needs: { "面粉":4, "糖":3, "星尘":1 }, basePrice: 68, expBase: 30, cookSec: 12 },
+    10: { name:"🌙 星耀慕斯", needs: { "糖":5, "浆果":4, "幻梦露":1 }, basePrice: 120, expBase: 55, cookSec: 18 },
+    15: { name:"🌟 仙灵布丁", needs: { "糖":6, "面粉":5, "神秘花瓣":2 }, basePrice: 220, expBase: 100, cookSec: 24 },
+    20: { name:"💎 神谕蛋糕", needs: { "星尘":3, "幻梦露":2, "神秘花瓣":2 }, basePrice: 400, expBase: 180, cookSec: 30 }
+  };
+  const baseRecipes = {
+    "草莓蛋糕": { needs: { "糖":2, "浆果":2 }, basePrice: 30, expBase: 12, cookSec: 8 },
+    "曲奇饼干": { needs: { "面粉":3, "糖":1 }, basePrice: 15, expBase: 8, cookSec: 5 },
+    "果汁":      { needs: { "浆果":3 }, basePrice: 20, expBase: 10, cookSec: 6 }
+  };
+  function getAllRecipes() { let r = { ...baseRecipes }; for(let lvl in advancedRecipesDB) if(gameData.shopLevel >= parseInt(lvl)) r[advancedRecipesDB[lvl].name] = advancedRecipesDB[lvl]; return r; }
 
-// 尝试加载图片（路径相对于当前HTML）
-tryLoadImage('#shop-bg-img', 'images/shop_bg.png', 'has-bg');
-tryLoadImage('#player-img', 'images/player.png');
-tryLoadImage('#forest-bg-img', 'images/forest_bg.png', 'has-bg');
+  // 客人系统 (独立倒计时不重复动画)
+  let activeVisitors = []; let nextVisitorId = 1; let visitorSpawnTimeout = null;
+  // 烹饪系统
+  let isCooking = false, cookingTimer = null, cookingRemainSec = 0, pendingRecipe = null;
+  // 探险系统 - 优化单独刷新探险计时，不整体重建列表
+  let exploringActive = false, exploreTimer = null, exploreRemainSec = 0, currentExploreLoc = null;
+  const locationsDB = [{id:0,name:"🍃 微风草地",needLevel:1,rewards:["糖","面粉","浆果"],minQty:1,maxQty:3},{id:1,name:"🌙 萤火沼泽",needLevel:5,rewards:["糖","浆果","神秘花瓣"],minQty:2,maxQty:4},{id:2,name:"⛰️ 晶石洞穴",needLevel:10,rewards:["糖","面粉","星尘"],minQty:2,maxQty:5},{id:3,name:"✨ 天空浮岛",needLevel:15,rewards:["星尘","幻梦露","神秘花瓣"],minQty:2,maxQty:6}];
 
-// 如果没有加载成功，保留默认样式（彩色方块）
+  // ---------- 体力恢复 (现实时间) ----------
+  function updateStaminaFromRealTime() {
+    let now = Date.now();
+    let last = gameData.lastStaminaUpdate || now;
+    let diffSec = Math.floor((now - last) / 1000);
+    let recoverCount = Math.floor(diffSec / 80);
+    if(recoverCount > 0) {
+      let maxStam = getMaxStamina();
+      gameData.stamina = Math.min(maxStam, gameData.stamina + recoverCount);
+      gameData.lastStaminaUpdate = now - (diffSec % 80) * 1000;
+      if(gameData.stamina > maxStam) gameData.stamina = maxStam;
+      saveGame();
+    } else { gameData.lastStaminaUpdate = now; saveGame(); }
+    refreshAllUI();
+  }
+  function getMaxStamina() { return Math.min(300, 120 + Math.floor(gameData.shopLevel/5)*10); }
+  function consumeStamina(cost) { 
+    if(gameData.stamina < cost) { showModal("体力不足","等待体力恢复 (每80秒1点)",()=>{}); return false; }
+    gameData.stamina -= cost; gameData.lastStaminaUpdate = Date.now(); saveGame(); refreshAllUI(); return true; 
+  }
+  // 体力倒计时显示（修正时间计算）
+  function updateStaminaTimerDisplay() {
+    let now = Date.now(); let last = gameData.lastStaminaUpdate; let diff = Math.floor((now - last)/1000);
+    let maxStam = getMaxStamina();
+    if(gameData.stamina >= maxStam) { if(document.getElementById('stamina-timer-text')) document.getElementById('stamina-timer-text').innerText = " 已满"; return; }
+    let remainSec = 80 - (diff % 80);
+    if(remainSec === 80) remainSec = 0;
+    if(document.getElementById('stamina-timer-text')) document.getElementById('stamina-timer-text').innerHTML = ` ⏱️${remainSec}s`;
+  }
+  function saveGame() { localStorage.setItem('xingmeng_save', JSON.stringify(gameData)); }
+  function loadGame() {
+    let saved = localStorage.getItem('xingmeng_save');
+    if(saved) { let d = JSON.parse(saved); gameData = { ...gameData, ...d, materials: d.materials||gameData.materials, shelves: d.shelves||new Array(gameData.maxShelves||2).fill(null) }; }
+    if(!gameData.shelves || gameData.shelves.length !== gameData.maxShelves) { gameData.shelves = new Array(gameData.maxShelves).fill(null); }
+    updateStaminaFromRealTime();
+    refreshAllUI();
+  }
+  function showGameToast(msg) { let d=document.createElement('div'); d.className='toast'; d.innerText=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),1800); }
+  function showModal(title,msg,onConfirm,onCancel=null){
+    let mask=document.createElement('div'); mask.className='modal-mask';
+    mask.innerHTML=`<div class="modal-card"><h3>${title}</h3><p style="margin:12px 0;">${msg}</p><div class="flex-between" style="gap:12px"><button class="btn" id="modal-confirm">确认</button><button class="btn" id="modal-cancel">取消</button></div></div>`;
+    document.body.appendChild(mask);
+    mask.querySelector('#modal-confirm').onclick=()=>{ mask.remove(); if(onConfirm) onConfirm(); };
+    mask.querySelector('#modal-cancel').onclick=()=>{ mask.remove(); if(onCancel) onCancel(); };
+  }
+  function addShopExp(amount){
+    gameData.shopExp += amount; let need = 100+(gameData.shopLevel-1)*20;
+    while(gameData.shopExp >= need){
+      gameData.shopExp -= need; gameData.shopLevel++; need = 100+(gameData.shopLevel-1)*20;
+      let newMax = 2+Math.floor(gameData.shopLevel/2); if(newMax>10) newMax=10;
+      if(newMax > gameData.maxShelves){ gameData.maxShelves = newMax; while(gameData.shelves.length < gameData.maxShelves) gameData.shelves.push(null); gameData.shelves = gameData.shelves.slice(0,gameData.maxShelves); showGameToast(`🏆 小店升${gameData.shopLevel}级！货架上限${gameData.maxShelves}`); }
+      else showGameToast(`🏆 小店升${gameData.shopLevel}级！`);
+      if(gameData.shopLevel %5===0 && advancedRecipesDB[gameData.shopLevel]) showGameToast(advancedRecipesDB[gameData.shopLevel].name+" 食谱解锁！");
+      let newStam=getMaxStamina(); if(gameData.stamina>newStam) gameData.stamina=newStam;
+    }
+    saveGame(); refreshAllUI();
+  }
+  function addAdventureExp(amount){ gameData.adventureExp+=amount; let need=80+(gameData.adventureLevel-1)*30; while(gameData.adventureExp>=need){ gameData.adventureExp-=need; gameData.adventureLevel++; need=80+(gameData.adventureLevel-1)*30; showGameToast(`🌟 探险等级${gameData.adventureLevel}`); } saveGame(); refreshAllUI(); }
+
+  // ---------- 客人系统 (优化显示所有客人，无重复跳动) ----------
+  function spawnVisitor() {
+    if(activeVisitors.length >= 5) return;
+    let filled = gameData.shelves.map((item,idx)=>item!==null?idx:null).filter(v=>v!==null);
+    if(filled.length===0) return;
+    let targetIdx = filled[Math.floor(Math.random()*filled.length)];
+    let targetItem = gameData.shelves[targetIdx];
+    let vid = nextVisitorId++;
+    let remain = 180;
+    let interval = setInterval(()=>{ 
+      let v=activeVisitors.find(vv=>vv.id===vid); 
+      if(v){ v.remain--; if(v.remain<=0){ clearInterval(interval); removeVisitor(vid,true); } else updateVisitorUI(v); } 
+    },1000);
+    activeVisitors.push({ id:vid, shelfIdx:targetIdx, remain, timerInterval:interval, wantItem:targetItem });
+    refreshVisitorList(); // 刷新整个列表展示新客人
+    showGameToast(`🎉 新客人到来！想要 ${targetItem.quality}·${targetItem.name} ！`);
+  }
+  function removeVisitor(vid, timeout=false) {
+    let idx=activeVisitors.findIndex(v=>v.id===vid); if(idx===-1) return;
+    if(activeVisitors[idx].timerInterval) clearInterval(activeVisitors[idx].timerInterval);
+    if(timeout) showGameToast(`😢 客人等不及离开了...`);
+    activeVisitors.splice(idx,1);
+    refreshVisitorList();
+    scheduleVisitorSpawn();
+  }
+  function updateVisitorUI(visitor) {
+    let card = document.getElementById(`visitor-card-${visitor.id}`);
+    if(card){
+      let percent = (visitor.remain/180)*100;
+      let fillDiv = card.querySelector('.timer-fill');
+      if(fillDiv) fillDiv.style.width = `${percent}%`;
+      let timeSpan = card.querySelector('.time-left');
+      if(timeSpan) timeSpan.innerText = `${Math.floor(visitor.remain/60)}:${(visitor.remain%60).toString().padStart(2,'0')}`;
+      let moodSpan = card.querySelector('.mood-emoj');
+      if(moodSpan) moodSpan.innerText = visitor.remain>120 ? "😊" : (visitor.remain>60 ? "😐" : "😫");
+    }
+  }
+  function refreshVisitorList() {
+    let container = document.getElementById('visitor-queue-list'); if(!container) return;
+    container.innerHTML = '';
+    for(let v of activeVisitors){
+      let percent = (v.remain/180)*100;
+      let mood = v.remain>120 ? "😊" : (v.remain>60 ? "😐" : "😫");
+      let div = document.createElement('div'); div.className='visitor-card'; div.id = `visitor-card-${v.id}`;
+      div.innerHTML = `<div class="visitor-info"><div class="visitor-name"><span class="mood-emoj">${mood}</span> 顾客·${v.id}</div><div class="visitor-want">想要：${v.wantItem.quality} ${v.wantItem.name}</div></div>
+        <div class="visitor-timer"><span class="time-left">${Math.floor(v.remain/60)}:${(v.remain%60).toString().padStart(2,'0')}</span><div class="timer-bar"><div class="timer-fill" style="width:${percent}%;"></div></div><button class="sell-visitor-btn" data-id="${v.id}">出售</button></div>`;
+      div.querySelector('.sell-visitor-btn').onclick = ()=>sellToVisitor(v.id);
+      container.appendChild(div);
+    }
+    document.getElementById('visitor-count') && (document.getElementById('visitor-count').innerText=activeVisitors.length);
+  }
+  function scheduleVisitorSpawn() { if(visitorSpawnTimeout) clearTimeout(visitorSpawnTimeout); visitorSpawnTimeout = setTimeout(()=>{ if(activeVisitors.length<5) spawnVisitor(); scheduleVisitorSpawn(); }, Math.random()*15000+8000); }
+  function sellToVisitor(visitorId) {
+    let v=activeVisitors.find(vv=>vv.id===visitorId); if(!v) return;
+    let item = gameData.shelves[v.shelfIdx]; if(!item) { showGameToast("美食已售出"); removeVisitor(visitorId,false); return; }
+    let recipe = getAllRecipes()[item.name]; if(!recipe) return;
+    let mult = { "普通":1, "高级":1.5, "极品":2.2, "绝品":3.5, "仙品":6 }[item.quality] || 1;
+    let earnGold = Math.floor(recipe.basePrice * mult);
+    let earnExp = Math.floor(recipe.expBase * mult);
+    gameData.gold += earnGold; addShopExp(earnExp);
+    gameData.shelves[v.shelfIdx] = null;
+    showGameToast(`💰 售出 ${item.quality}·${item.name} +${earnGold}金 +${earnExp}经验`);
+    removeVisitor(visitorId, false);
+    saveGame(); refreshAllUI();
+  }
+
+  // ---------- 烹饪系统 ----------
+  function startCooking(recipeName){
+    if(isCooking){ showGameToast("已有烹饪进行中"); return; }
+    let recipes=getAllRecipes(); let recipe=recipes[recipeName]; if(!recipe) return;
+    for(let [mat,need] of Object.entries(recipe.needs)) if((gameData.materials[mat]||0)<need){ showModal("材料不足","请采集或购买",()=>{}); return; }
+    if(!consumeStamina(5)) return;
+    let emptySlot=gameData.shelves.findIndex(s=>s===null); if(emptySlot===-1){ showModal("货架满","先卖掉货架上的美食",()=>{}); return; }
+    for(let [mat,need] of Object.entries(recipe.needs)) gameData.materials[mat]-=need;
+    isCooking=true; pendingRecipe=recipeName; cookingRemainSec=recipe.cookSec;
+    let totalSec=recipe.cookSec; let interval=setInterval(()=>{ if(!isCooking){ clearInterval(interval); return; } cookingRemainSec--; updateCookingUI(cookingRemainSec,totalSec); if(cookingRemainSec<=0){ clearInterval(interval); finishCooking(emptySlot); } },1000);
+    cookingTimer=interval; updateCookingUI(cookingRemainSec,totalSec);
+    showGameToast(`👩‍🍳 开始制作 ${recipeName} (${totalSec}秒)`);
+    saveGame(); refreshAllUI();
+  }
+  function updateCookingUI(remain,total){ let area=document.getElementById('cooking-status-area'); if(area){ let percent=((total-remain)/total)*100; area.innerHTML=`<div class="card">🔥 烹饪中: ${pendingRecipe} ⏳ ${remain}秒<div class="exp-bar"><div class="exp-fill" style="width:${percent}%; background:#d46b1e;"></div></div><button class="btn" id="cancel-cook" style="padding:6px;">取消(材料不返还)</button></div>`; document.getElementById('cancel-cook')?.addEventListener('click',()=>{ if(isCooking){ clearInterval(cookingTimer); isCooking=false; showGameToast("烹饪取消"); updateCookingUI(0,0); refreshAllUI(); } }); } }
+  function finishCooking(slotIdx){ isCooking=false; if(cookingTimer) clearInterval(cookingTimer); let recipe=getAllRecipes()[pendingRecipe]; if(!recipe) return; let rand=Math.random()*100; let quality="普通"; if(rand<1) quality="仙品"; else if(rand<5) quality="绝品"; else if(rand<20) quality="极品"; else if(rand<50) quality="高级"; gameData.shelves[slotIdx]={ name:pendingRecipe, quality:quality }; showGameToast(`✨ 完成 ${quality}·${pendingRecipe}`); saveGame(); refreshAllUI(); updateCookingUI(0,0); pendingRecipe=null; }
+
+  // ---------- 探险界面 (优化动态刷新，避免重复构建动画) ----------
+  function renderExplore() {
+    let container=document.getElementById('explore-locations-container'); if(!container) return;
+    container.innerHTML='';
+    if(exploringActive){
+      let remainSec = exploreRemainSec; let minutes = Math.floor(remainSec/60); let secs = remainSec%60;
+      let div=document.createElement('div'); div.className='explore-timer-card'; div.id="explore-timer-card";
+      div.innerHTML=`⏳ 探险中... ${minutes}:${secs.toString().padStart(2,'0')}<div class="exp-bar"><div class="exp-fill" id="explore-progress-fill" style="width:${(1-remainSec/300)*100}%; background:#f1c40f;"></div></div><button class="btn" id="cancel-explore" style="margin-top:6px;">取消探险</button>`;
+      container.appendChild(div);
+      document.getElementById('cancel-explore')?.addEventListener('click',()=>{ if(exploringActive){ clearInterval(exploreTimer); exploringActive=false; showGameToast("探险取消"); renderExplore(); refreshAllUI(); } });
+      return;
+    }
+    for(let loc of locationsDB){
+      let unlocked = gameData.shopLevel >= loc.needLevel;
+      let itemDiv = document.createElement('div'); itemDiv.className='explore-location-item';
+      itemDiv.innerHTML = `<div><div class="explore-name">${loc.name}</div><div class="explore-desc">Lv.${loc.needLevel} | ${loc.rewards.join(',')}</div></div><button class="explore-btn" data-id="${loc.id}" ${!unlocked?'disabled style="opacity:0.5;"':''}>${unlocked?'探险':'未解锁'}</button>`;
+      if(unlocked) itemDiv.querySelector('.explore-btn').onclick = ()=> showModal("出发探险",`确定前往 ${loc.name} 消耗12体力?`,()=> startExplore(loc.id));
+      container.appendChild(itemDiv);
+    }
+  }
+  function startExplore(locId){
+    if(exploringActive){ showGameToast("已在探险中"); return; }
+    let loc=locationsDB.find(l=>l.id===locId); if(!loc) return;
+    if(gameData.shopLevel<loc.needLevel){ showModal("等级不足",`需要小店等级 ${loc.needLevel}`,()=>{}); return; }
+    if(!consumeStamina(12)) return;
+    exploringActive=true; exploreRemainSec=300; currentExploreLoc=loc;
+    if(exploreTimer) clearInterval(exploreTimer);
+    exploreTimer = setInterval(()=>{
+      if(!exploringActive){ clearInterval(exploreTimer); return; }
+      exploreRemainSec--;
+      if(exploreRemainSec <= 0){ clearInterval(exploreTimer); finishExplore(); }
+      else {
+        let remainSec = exploreRemainSec;
+        let minutes = Math.floor(remainSec/60); let secs = remainSec%60;
+        let timerCard = document.getElementById('explore-timer-card');
+        if(timerCard){
+          timerCard.innerHTML = `⏳ 探险中... ${minutes}:${secs.toString().padStart(2,'0')}<div class="exp-bar"><div class="exp-fill" style="width:${(1-remainSec/300)*100}%; background:#f1c40f;"></div></div><button class="btn" id="cancel-explore" style="margin-top:6px;">取消探险</button>`;
+          document.getElementById('cancel-explore')?.addEventListener('click',()=>{ if(exploringActive){ clearInterval(exploreTimer); exploringActive=false; showGameToast("探险取消"); renderExplore(); refreshAllUI(); } });
+        }
+      }
+    }, 1000);
+    renderExplore(); refreshAllUI();
+  }
+  function finishExplore(){
+    exploringActive=false; if(exploreTimer) clearInterval(exploreTimer);
+    let loc=currentExploreLoc; if(loc){ let count=Math.floor(Math.random()*(loc.maxQty-loc.minQty+1)+loc.minQty); for(let i=0;i<count;i++){ let got=loc.rewards[Math.floor(Math.random()*loc.rewards.length)]; if(!gameData.materials[got]) gameData.materials[got]=0; gameData.materials[got]++; } addAdventureExp(18+Math.floor(Math.random()*15)); showGameToast(`探险归来! 获得${count}种材料`); }
+    currentExploreLoc=null; renderExplore(); refreshAllUI(); saveGame();
+  }
+
+  // 材料商店 (优化排版一个商品一排)
+  function renderStore() {
+    let container=document.getElementById('store-items-list'); if(!container) return; container.innerHTML='';
+    let storeGoods = [{ name:"糖", basePrice:8, quality:"普通"},{ name:"糖", basePrice:25, quality:"高级"},{ name:"面粉", basePrice:8, quality:"普通"},{ name:"面粉", basePrice:25, quality:"高级"},{ name:"浆果", basePrice:12, quality:"普通"},{ name:"浆果", basePrice:35, quality:"极品"}];
+    storeGoods.forEach((g,idx)=>{
+      let qty=1; let div=document.createElement('div'); div.className='card store-item-card';
+      div.innerHTML=`<div class="flex-between"><span>🍎 ${g.name}【${g.quality}】单价💰${g.basePrice}</span><div class="qty-control"><span class="qty-btn" data-dir="down">-</span><span id="qty-${idx}">1</span><span class="qty-btn" data-dir="up">+</span></div></div><div class="flex-between"><span class="total-price">总价: 💰<span id="total-${idx}">${g.basePrice}</span></span><button class="btn buy-btn" data-idx="${idx}" style="padding:8px 16px;">购买 x<span id="buy-qty-${idx}">1</span></button></div>`;
+      container.appendChild(div);
+      let qtySpan=div.querySelector(`#qty-${idx}`); let totalSpan=div.querySelector(`#total-${idx}`); let buyQtySpan=div.querySelector(`#buy-qty-${idx}`);
+      function updateUI(){ let val=qty; qtySpan.innerText=val; let total=g.basePrice*val; totalSpan.innerText=total; buyQtySpan.innerText=val; }
+      div.querySelector('[data-dir="down"]').onclick=()=>{ if(qty>1) qty--; updateUI(); };
+      div.querySelector('[data-dir="up"]').onclick=()=>{ qty++; updateUI(); };
+      div.querySelector('.buy-btn').onclick=()=>{ let cost=g.basePrice*qty; if(gameData.gold>=cost){ gameData.gold-=cost; if(!gameData.materials[g.name]) gameData.materials[g.name]=0; gameData.materials[g.name]+=qty; showGameToast(`购买 ${g.quality}·${g.name} x${qty}`); saveGame(); refreshAllUI(); qty=1; updateUI(); renderStore(); } else showGameToast("金币不足"); };
+      updateUI();
+    });
+  }
+
+  // ---------- 全局UI刷新 ----------
+  function refreshAllUI() {
+    let maxStam=getMaxStamina();
+    document.querySelectorAll('#stamina-display, #stamina-craft, #stamina-explore').forEach(el=>el.innerText=gameData.stamina);
+    document.querySelectorAll('#max-stamina, #max-stamina-profile').forEach(el=>el.innerText=maxStam);
+    document.querySelectorAll('[id^="gold-"]').forEach(el=>el.innerText=Math.floor(gameData.gold));
+    let matStr=Object.entries(gameData.materials).map(([k,v])=>`${k}:${v}`).join(' ');
+    document.getElementById('materials-display') && (document.getElementById('materials-display').innerText=matStr);
+    document.getElementById('explore-materials') && (document.getElementById('explore-materials').innerHTML=matStr);
+    // 货架渲染
+    let shelfDiv=document.getElementById('shelf-container'); if(shelfDiv){ shelfDiv.innerHTML='';
+      for(let i=0;i<gameData.maxShelves;i++){ let slot=gameData.shelves[i]; let div=document.createElement('div'); div.className='shelf-slot'+(slot===null?' slot-empty':''); if(slot){ div.innerHTML=`<div>${slot.name}</div><div class="item-quality quality-${slot.quality}">✨ ${slot.quality}</div>`; div.onclick=()=>{ let rec=getAllRecipes()[slot.name]; let mult={普通:1,高级:1.5,极品:2.2,绝品:3.5,仙品:6}[slot.quality]; let earn=Math.floor(rec.basePrice*mult); gameData.gold+=earn; addShopExp(Math.floor(rec.expBase*mult)); gameData.shelves[i]=null; saveGame(); refreshAllUI(); showGameToast(`卖出 +${earn}💰`); }; } else div.innerHTML=`<div>🪵 空货架</div>`; shelfDiv.appendChild(div); }
+    }
+    document.getElementById('shelf-max') && (document.getElementById('shelf-max').innerText=gameData.maxShelves);
+    document.getElementById('shop-level-num') && (document.getElementById('shop-level-num').innerText=gameData.shopLevel);
+    let levelImg=document.getElementById('shop-level-img'); if(levelImg) levelImg.innerHTML=gameData.shopLevel>=10?"🏆"+gameData.shopLevel:"🏪"+gameData.shopLevel;
+    document.getElementById('shop-level-info') && (document.getElementById('shop-level-info').innerText=gameData.shopLevel);
+    let needExp=100+(gameData.shopLevel-1)*20; document.getElementById('shop-exp') && (document.getElementById('shop-exp').innerText=gameData.shopExp); document.getElementById('next-exp') && (document.getElementById('next-exp').innerText=needExp); let fill=(gameData.shopExp/needExp)*100; if(document.getElementById('shop-exp-fill')) document.getElementById('shop-exp-fill').style.width=fill+'%';
+    let advNeed=80+(gameData.adventureLevel-1)*30; document.getElementById('adventure-level') && (document.getElementById('adventure-level').innerText=gameData.adventureLevel); document.getElementById('adv-exp') && (document.getElementById('adv-exp').innerText=gameData.adventureExp); document.getElementById('adv-next-exp') && (document.getElementById('adv-next-exp').innerText=advNeed); if(document.getElementById('adv-exp-fill')) document.getElementById('adv-exp-fill').style.width=(gameData.adventureExp/advNeed)*100+'%';
+    document.getElementById('shelf-capacity') && (document.getElementById('shelf-capacity').innerText=gameData.maxShelves);
+    refreshVisitorList();
+    if(document.getElementById('scene-craft').classList.contains('active')){ let recipeContainer=document.getElementById('recipe-list'); if(recipeContainer){ recipeContainer.innerHTML=''; for(let [name,data] of Object.entries(getAllRecipes())){ let card=document.createElement('div'); card.className='card'; card.style.cursor='pointer'; card.innerHTML=`<div><b>${name}</b> 所需:${Object.entries(data.needs).map(([m,n])=>`${m}x${n}`).join(' ')} 售价💰${data.basePrice} ${data.cookSec}秒</div>`; card.onclick=()=>startCooking(name); recipeContainer.appendChild(card); } } }
+    updateStaminaTimerDisplay();
+  }
+
+  function showScene(sceneId){
+    document.querySelectorAll('.scene').forEach(s=>s.classList.remove('active'));
+    document.getElementById(`scene-${sceneId}`).classList.add('active');
+    if(sceneId==='store') renderStore(); if(sceneId==='explore') renderExplore(); refreshAllUI();
+  }
+
+  function init(){
+    loadGame();
+    setInterval(()=>{ updateStaminaFromRealTime(); refreshAllUI(); }, 2000);
+    setInterval(()=>{ updateStaminaTimerDisplay(); }, 500);
+    scheduleVisitorSpawn();
+    document.getElementById('btn-craft').onclick=()=>showScene('craft');
+    document.getElementById('btn-explore').onclick=()=>showScene('explore');
+    document.getElementById('btn-shop-store').onclick=()=>showScene('store');
+    document.getElementById('open-profile-btn').onclick=()=>showScene('profile');
+    document.getElementById('btn-back-craft').onclick=()=>showScene('shop');
+    document.getElementById('btn-back-explore').onclick=()=>showScene('shop');
+    document.getElementById('close-store').onclick=()=>showScene('shop');
+    document.getElementById('close-profile').onclick=()=>showScene('shop');
+    refreshAllUI();
+  }
+  init();
 </script>
 </body>
 </html>
