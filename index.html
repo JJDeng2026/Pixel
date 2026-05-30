@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, touch-action: none">
+  <title>星塔之下：织链者 · GIF翻转</title>
+  <style>
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+    }
+    body {
+      background: #1a1a2e;
+      display: flex; justify-content: center; align-items: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace; touch-action: none;
+    }
+    .game-container {
+      position: relative; width: 100%; max-width: 400px; aspect-ratio: 9 / 16;
+      background: #0f0f1f; border: 4px solid #3d2b5a; border-radius: 24px;
+      overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      display: flex; flex-direction: column; touch-action: none;
+    }
+    .screen { display: none; flex-direction: column; flex: 1; width: 100%; height: 100%; position: relative; }
+    .screen.active { display: flex; }
+    .bg-placeholder {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(180deg, #1e1e3a 0%, #2a1e3a 100%);
+      z-index: 0;
+    }
+    .pixel-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background-image: 
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 8px 8px; z-index: 1; pointer-events: none;
+    }
+    .content { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; padding: 12px; color: #e0e0ff; }
+
+    .base-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 2px solid #5e4a7a; margin-bottom: 12px; }
+    .base-title { font-size: 1.5rem; font-weight: bold; color: #f0c060; text-shadow: 2px 2px 0 #3d2b5a; }
+    .resource-bar { display: flex; gap: 12px; font-size: 0.9rem; background: #2a1e3a; padding: 6px 12px; border-radius: 20px; }
+    .character-list { display: flex; flex-direction: column; gap: 15px; overflow-y: auto; flex: 1; margin: 10px 0; }
+    .char-card { background: rgba(40, 30, 60, 0.9); border: 2px solid #5e4a7a; border-radius: 16px; padding: 10px; display: flex; align-items: center; gap: 12px; }
+    .char-sprite { width: 60px; height: 60px; background: #4a3a6a; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #f0c060; border: 2px solid #7a6a9a; }
+    .char-info { flex: 1; color: #ccc; }
+    .char-name { font-weight: bold; font-size: 1.1rem; color: #f0c060; }
+    .char-stats { font-size: 0.8rem; display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+    .upgrade-btn { background: #5e4a7a; border: none; color: white; padding: 8px 14px; border-radius: 20px; font-weight: bold; cursor: pointer; border-bottom: 3px solid #3d2b5a; touch-action: manipulation; }
+    .upgrade-btn:active { transform: translateY(2px); border-bottom-width: 1px; }
+    .enter-tower-btn { background: #f0c060; border: none; color: #1a1a2e; padding: 14px; border-radius: 30px; font-weight: bold; font-size: 1.3rem; margin-top: 5px; cursor: pointer; border-bottom: 4px solid #b09040; letter-spacing: 2px; touch-action: manipulation; }
+
+    .battle-canvas-container { flex: 1; position: relative; touch-action: none; background: #1a1a2e; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .battle-ui-overlay {
+      position: absolute; top: 8px; left: 8px; right: 8px;
+      display: flex; flex-direction: column; gap: 4px; color: white; font-size: 0.8rem; z-index: 5; pointer-events: none;
+    }
+    .stat-row { display: flex; align-items: center; gap: 6px; }
+    .hp-bar-bg, .mana-bar-bg { background: #333; height: 10px; border-radius: 5px; flex: 1; }
+    .hp-bar-fill { height: 100%; background: #c04040; border-radius: 5px; width: 100%; }
+    .mana-bar-fill { height: 100%; background: #4060c0; border-radius: 5px; width: 100%; }
+    .progress-row { display: flex; justify-content: space-between; font-size: 0.7rem; }
+    .skill-btn-overlay {
+      position: absolute; bottom: 16px; left: 16px; right: 16px;
+      display: flex; justify-content: center; gap: 12px; z-index: 10;
+    }
+    .skill-btn {
+      background: #3d2b5a; border: 2px solid #7a6a9a; color: #e0e0ff;
+      padding: 12px 20px; border-radius: 30px; font-weight: bold; font-size: 0.9rem;
+      cursor: pointer; touch-action: manipulation; pointer-events: auto;
+    }
+    .skill-btn:active { background: #5e4a7a; }
+    .skill-btn.cooldown { opacity: 0.5; pointer-events: none; }
+
+    .upgrade-panel {
+      position: absolute; bottom: 80px; left: 10px; right: 10px;
+      background: rgba(20, 10, 40, 0.95); border: 2px solid #7a6a9a;
+      border-radius: 20px; padding: 12px; z-index: 20;
+      display: none; flex-direction: column; gap: 8px; color: white; text-align: center;
+    }
+    .upgrade-title { font-size: 1rem; margin-bottom: 4px; }
+    .upgrade-cards { display: flex; gap: 10px; justify-content: center; }
+    .upgrade-card {
+      background: #3d2b5a; border: 2px solid #5e4a7a; border-radius: 16px;
+      padding: 8px; width: 90px; cursor: pointer; display: flex;
+      flex-direction: column; align-items: center; gap: 4px;
+      transition: 0.1s; touch-action: manipulation;
+    }
+    .upgrade-card:active { background: #5e4a7a; transform: scale(0.95); }
+    .card-img { width: 60px; height: 60px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 2rem; border: 2px solid #7a6a9a; }
+    .card-label { font-size: 0.7rem; font-weight: bold; }
+
+    .result-panel { background: rgba(20, 10, 40, 0.95); border: 2px solid #7a6a9a; border-radius: 24px; padding: 20px; text-align: center; color: white; margin: 20px; }
+    .result-btn { background: #f0c060; border: none; color: #1a1a2e; padding: 12px 24px; border-radius: 30px; font-weight: bold; margin-top: 15px; cursor: pointer; border-bottom: 4px solid #b09040; touch-action: manipulation; }
+
+    /* 🔧修改点1：确保翻转时以图片中心为轴 */
+    #playerGif {
+      position: absolute;
+      pointer-events: none;
+      image-rendering: pixelated;
+      z-index: 4;
+      transform-origin: center center;
+    }
+  </style>
+</head>
+<body>
+<div class="game-container" id="gameContainer">
+  <div class="bg-placeholder" id="bgLayer"></div>
+  <div class="pixel-overlay"></div>
+
+  <!-- 基地界面 -->
+  <div id="baseScreen" class="screen active">
+    <div class="content">
+      <div class="base-header">
+        <span class="base-title">⚡织链者基地</span>
+        <div class="resource-bar">
+          <span>🔷<span id="resData">50</span></span>
+          <span>⭐<span id="resCore">2</span></span>
+        </div>
+      </div>
+      <div class="character-list" id="charList"></div>
+      <button class="enter-tower-btn" id="enterTowerBtn">▶ 进入巴别塔</button>
+    </div>
+  </div>
+
+  <!-- 战斗界面 -->
+  <div id="battleScreen" class="screen">
+    <div class="battle-canvas-container" id="canvasContainer">
+      <canvas id="gameCanvas"></canvas>
+      <!-- 🔧修改点2：角色GIF标签 -->
+      <img id="playerGif" src="" alt="hero" style="width:40px; height:40px;" />
+      
+      <div class="battle-ui-overlay">
+        <div class="stat-row">
+          <span>❤️</span><span id="hpText">100</span>/<span id="maxHpText">100</span>
+          <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpFill"></div></div>
+        </div>
+        <div class="stat-row">
+          <span>💙</span><span id="manaText">50</span>/<span id="maxManaText">50</span>
+          <div class="mana-bar-bg"><div class="mana-bar-fill" id="manaFill"></div></div>
+        </div>
+        <div class="progress-row">
+          <span>击杀 <span id="killCount">0</span>/<span id="killTarget">15</span></span>
+          <span>🔫<span id="bulletCount">1</span>颗</span>
+          <span>⚡临时攻击+<span id="tempAtk">0</span></span>
+          <span id="elementDisplay">🔥火</span>
+        </div>
+      </div>
+      <div class="skill-btn-overlay">
+        <button class="skill-btn" id="skill1Btn">🔥 火焰弹 (20)</button>
+      </div>
+      <div class="upgrade-panel" id="upgradePanel">
+        <div class="upgrade-title">⬆️ 选择强化</div>
+        <div class="upgrade-cards" id="upgradeCards"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结算界面 -->
+  <div id="resultScreen" class="screen">
+    <div class="content" style="justify-content: center;">
+      <div class="result-panel" id="resultPanel"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    // ==================== 🔧修改点3：资源路径 ====================
+    const ASSETS = {
+      idleGif: 'zhan.gif',   // 待机动画
+      runGif: 'pao.gif',     // 跑步动画
+      playerWidth: 40,
+      playerHeight: 40,
+    };
+    // ===========================================================
+
+    const ELEMENTS = {
+      fire: { name: '火', color: '#f0a060', bulletColor: '#f0c040', skillName: '火焰弹', skillCost: 20, skillCooldown: 3, skillDamage: 35, skillAoe: 50, skillColor: '#ff8844' },
+      ice: { name: '冰', color: '#60c0f0', bulletColor: '#60d0ff', skillName: '冰霜新星', skillCost: 25, skillCooldown: 4, skillDamage: 28, skillAoe: 70, skillColor: '#88ccff' },
+      lightning: { name: '雷', color: '#d0c0ff', bulletColor: '#c090ff', skillName: '连锁闪电', skillCost: 22, skillCooldown: 3.5, skillDamage: 32, skillAoe: 60, skillColor: '#cc88ff' }
+    };
+
+    const GameState = {
+      resources: { data: 50, core: 2 },
+      player: {
+        name: '健一', maxHp: 100, hp: 100, atk: 15,
+        attackCooldown: 0.6, attackRange: 150, moveSpeed: 3.5,
+        maxMana: 50, mana: 50, manaRegen: 5, element: 'fire'
+      },
+      battle: {
+        active: false, paused: false, enemies: [], bullets: [], damageNumbers: [], skillEffects: [],
+        playerWorldX: 0, playerWorldY: 0, targetWorldX: 0, targetWorldY: 0, isMoving: false,
+        killCount: 0, killTarget: 15, lastTime: 0,
+        canvasWidth: 0, canvasHeight: 0, worldWidth: 1600, worldHeight: 2400,
+        invincibleTimer: 0, tempAtk: 0, tempSkillDmg: 0, tempBulletCount: 1, tempBulletDmg: 0, tempMoveSpeed: 0,
+        nextUpgradeKills: 5, maxEnemies: 5, _attackTimer: 0, skillCooldownTimer: 0,
+        /* 🔧修改点4：增加朝向记录 */
+        facingRight: true
+      },
+      upgradeCosts: { hp: 20, atk: 20, speed: 25, cooldown: 30, mana: 25 }
+    };
+
+    const screens = {
+      base: document.getElementById('baseScreen'),
+      battle: document.getElementById('battleScreen'),
+      result: document.getElementById('resultScreen'),
+    };
+    function showScreen(name) {
+      Object.values(screens).forEach(s => s.classList.remove('active'));
+      if (screens[name]) screens[name].classList.add('active');
+    }
+
+    const playerGif = document.getElementById('playerGif');
+
+    function renderBase() {
+      document.getElementById('bgLayer').style.background = 'linear-gradient(180deg, #1e1e3a 0%, #2a1e3a 100%)';
+      document.getElementById('resData').textContent = GameState.resources.data;
+      document.getElementById('resCore').textContent = GameState.resources.core;
+      const p = GameState.player;
+      document.getElementById('charList').innerHTML = `
+        <div class="char-card">
+          <div class="char-sprite" style="background:#c04040;">${p.name[0]}</div>
+          <div class="char-info">
+            <div class="char-name">${p.name} (${ELEMENTS[p.element].name})</div>
+            <div class="char-stats">
+              <span>❤️${p.maxHp}</span> <span>⚔️${p.atk}</span>
+              <span>🔄${p.attackCooldown.toFixed(1)}s</span> <span>🏃${p.moveSpeed}</span>
+              <span>💙${p.maxMana}</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+          <button class="upgrade-btn" id="upHp">❤️+10 (${GameState.upgradeCosts.hp}🔷)</button>
+          <button class="upgrade-btn" id="upAtk">⚔️+3 (${GameState.upgradeCosts.atk}🔷)</button>
+          <button class="upgrade-btn" id="upSpd">🏃+0.2 (${GameState.upgradeCosts.speed}🔷)</button>
+          <button class="upgrade-btn" id="upCd">🔄-0.05s (${GameState.upgradeCosts.cooldown}🔷)</button>
+          <button class="upgrade-btn" id="upMana">💙+10 (${GameState.upgradeCosts.mana}🔷)</button>
+        </div>
+      `;
+      document.getElementById('upHp').onclick = ()=> upgrade('hp', ()=>{ p.maxHp+=10; p.hp=p.maxHp; });
+      document.getElementById('upAtk').onclick = ()=> upgrade('atk', ()=> p.atk+=3);
+      document.getElementById('upSpd').onclick = ()=> upgrade('speed', ()=> p.moveSpeed+=0.2);
+      document.getElementById('upCd').onclick = ()=> upgrade('cooldown', ()=> p.attackCooldown=Math.max(0.2, p.attackCooldown-0.05));
+      document.getElementById('upMana').onclick = ()=> upgrade('mana', ()=>{ p.maxMana+=10; p.mana=p.maxMana; });
+    }
+    function upgrade(type, apply) {
+      if (GameState.resources.data >= GameState.upgradeCosts[type]) {
+        GameState.resources.data -= GameState.upgradeCosts[type];
+        apply();
+        renderBase();
+      } else alert('数据不足');
+    }
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let animFrameId, battleRunning = false;
+
+    function resizeCanvas() {
+      const rect = document.getElementById('canvasContainer').getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      GameState.battle.canvasWidth = rect.width;
+      GameState.battle.canvasHeight = rect.height;
+    }
+
+    function startBattle() {
+      document.getElementById('bgLayer').style.background = 'linear-gradient(180deg, #2a1a2e 0%, #3a1e2e 100%)';
+      showScreen('battle');
+      resizeCanvas();
+      const b = GameState.battle;
+      b.worldWidth = 1600; b.worldHeight = 2400;
+      b.playerWorldX = b.worldWidth/2; b.playerWorldY = b.worldHeight/2;
+      b.targetWorldX = b.playerWorldX; b.targetWorldY = b.playerWorldY;
+      b.enemies = []; b.bullets = []; b.damageNumbers = []; b.skillEffects = [];
+      b.killCount = 0; b.killTarget = 15;
+      b.invincibleTimer = 0; b._attackTimer = 0; b.isMoving = false; b.paused = false;
+      b.tempAtk = 0; b.tempSkillDmg = 0; b.tempBulletCount = 1; b.tempBulletDmg = 0; b.tempMoveSpeed = 0;
+      b.nextUpgradeKills = 5; b.maxEnemies = 5; b.skillCooldownTimer = 0;
+      GameState.player.hp = GameState.player.maxHp;
+      GameState.player.mana = GameState.player.maxMana;
+      b.active = true; battleRunning = true;
+      b.lastTime = performance.now();
+      
+      playerGif.style.display = 'block';
+      playerGif.style.width = ASSETS.playerWidth + 'px';
+      playerGif.style.height = ASSETS.playerHeight + 'px';
+      playerGif.src = ASSETS.idleGif;
+      /* 🔧修改点5：初始化朝向和翻转 */
+      b.facingRight = true;
+      playerGif.style.transform = 'scaleX(1)';
+      
+      updateBattleUI();
+      document.getElementById('upgradePanel').style.display = 'none';
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      bindMovementEvents();
+      gameLoop(performance.now());
+    }
+
+    function endBattle(victory) {
+      battleRunning = false;
+      if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+      unbindMovementEvents();
+      playerGif.style.display = 'none';
+      const kills = GameState.battle.killCount;
+      let dataReward = kills * 2, coreReward = 0;
+      if (victory) { dataReward += 20; coreReward = 1; }
+      GameState.resources.data += dataReward;
+      GameState.resources.core += coreReward;
+      showResultScreen(victory, kills, dataReward, coreReward);
+    }
+
+    function showResultScreen(victory, kills, data, core) {
+      showScreen('result');
+      document.getElementById('resultPanel').innerHTML = `
+        <h2>${victory ? '🎉 塔层净化成功' : '💔 连接中断'}</h2>
+        <p>击败异常体: ${kills}</p><p>获得 🔷${data} ⭐${core}</p>
+        <button class="result-btn" id="backToBaseBtn">返回基地</button>
+      `;
+      document.getElementById('backToBaseBtn').onclick = ()=>{ showScreen('base'); renderBase(); };
+    }
+
+    function updateBattleUI() {
+      const p = GameState.player, b = GameState.battle;
+      document.getElementById('hpText').textContent = Math.max(0, Math.floor(p.hp));
+      document.getElementById('maxHpText').textContent = p.maxHp;
+      document.getElementById('hpFill').style.width = (p.hp/p.maxHp*100)+'%';
+      document.getElementById('manaText').textContent = Math.floor(p.mana);
+      document.getElementById('maxManaText').textContent = p.maxMana;
+      document.getElementById('manaFill').style.width = (p.mana/p.maxMana*100)+'%';
+      document.getElementById('killCount').textContent = b.killCount;
+      document.getElementById('killTarget').textContent = b.killTarget;
+      document.getElementById('bulletCount').textContent = b.tempBulletCount;
+      document.getElementById('tempAtk').textContent = b.tempBulletDmg;
+      document.getElementById('elementDisplay').textContent = ELEMENTS[p.element].name;
+      const el = ELEMENTS[p.element];
+      const btn = document.getElementById('skill1Btn');
+      btn.textContent = `${el.skillName} (${el.skillCost})`;
+      if (b.skillCooldownTimer > 0 || p.mana < el.skillCost) btn.classList.add('cooldown');
+      else btn.classList.remove('cooldown');
+    }
+
+    function updateMaxEnemies() {
+      const b = GameState.battle;
+      b.maxEnemies = Math.min(12, 5 + Math.floor(b.killCount / 4));
+    }
+
+    function spawnEnemy() {
+      const b = GameState.battle;
+      if (b.enemies.length >= b.maxEnemies) return;
+      const isElite = b.killCount >= 7 && Math.random() < 0.3 + (b.killCount-7)*0.05;
+      const w = b.worldWidth, h = b.worldHeight;
+      const side = Math.floor(Math.random()*4);
+      let x, y;
+      if (side===0) { x = Math.random()*w; y = -20; }
+      else if (side===1) { x = w+20; y = Math.random()*h; }
+      else if (side===2) { x = Math.random()*w; y = h+20; }
+      else { x = -20; y = Math.random()*h; }
+      b.enemies.push({
+        x, y,
+        hp: isElite ? 80 : 40, maxHp: isElite ? 80 : 40,
+        atk: isElite ? 14 : 8, speed: isElite ? 1.0 : 1.5,
+        size: isElite ? 38 : 28, color: isElite ? '#c05050' : '#a05050', isElite
+      });
+    }
+
+    function shootBullets(targetEnemy) {
+      const b = GameState.battle, p = GameState.player;
+      const px = b.playerWorldX, py = b.playerWorldY;
+      const dx = targetEnemy.x - px, dy = targetEnemy.y - py;
+      const baseAngle = Math.atan2(dy, dx);
+      const count = b.tempBulletCount, spread = 0.2;
+      const bulletDamage = p.atk + b.tempAtk + b.tempBulletDmg;
+      const bulletColor = ELEMENTS[p.element].bulletColor;
+      for (let i=0; i<count; i++) {
+        let angle = baseAngle + (i - (count-1)/2) * spread;
+        b.bullets.push({
+          x: px, y: py,
+          vx: Math.cos(angle)*8, vy: Math.sin(angle)*8,
+          damage: bulletDamage, life: 1.5, size: 6, color: bulletColor
+        });
+      }
+    }
+
+    function castSkill() {
+      const b = GameState.battle, p = GameState.player;
+      const el = ELEMENTS[p.element];
+      if (b.skillCooldownTimer > 0 || p.mana < el.skillCost) return;
+      p.mana -= el.skillCost;
+      b.skillCooldownTimer = el.skillCooldown;
+      const skillDamage = el.skillDamage + b.tempSkillDmg;
+      const px = b.playerWorldX, py = b.playerWorldY;
+      b.skillEffects.push({ x: px, y: py, radius: el.skillAoe, alpha: 1, color: el.skillColor, life: 0.4 });
+      for (let i = b.enemies.length-1; i >= 0; i--) {
+        const enemy = b.enemies[i];
+        if (Math.hypot(enemy.x-px, enemy.y-py) < el.skillAoe) {
+          enemy.hp -= skillDamage;
+          b.damageNumbers.push({ x: enemy.x, y: enemy.y-20, value: skillDamage, alpha:1, life:0.8 });
+          if (enemy.hp <= 0) {
+            b.enemies.splice(i,1); b.killCount++; updateMaxEnemies();
+            if (b.killCount >= b.killTarget) { endBattle(true); return; }
+          }
+        }
+      }
+      updateBattleUI();
+      checkUpgrade();
+    }
+
+    function checkUpgrade() {
+      const b = GameState.battle;
+      if (b.killCount >= b.nextUpgradeKills) { b.paused = true; showUpgradePanel(); }
+    }
+
+    function showUpgradePanel() {
+      const panel = document.getElementById('upgradePanel');
+      const cardsDiv = document.getElementById('upgradeCards');
+      const options = [
+        { img: '⚔️', label: '攻击+5', apply: ()=> GameState.battle.tempAtk+=5 },
+        { img: '✨', label: '技能伤害+10', apply: ()=> GameState.battle.tempSkillDmg+=10 },
+        { img: '🔫', label: '子弹+1', apply: ()=> GameState.battle.tempBulletCount = Math.min(5, GameState.battle.tempBulletCount+1) },
+        { img: '💥', label: '子弹伤害+5', apply: ()=> GameState.battle.tempBulletDmg+=5 },
+        { img: '🏃', label: '移速+0.2', apply: ()=> GameState.battle.tempMoveSpeed+=0.2 },
+        { img: '❄️', label: '转冰霜', apply: ()=> GameState.player.element = 'ice' },
+        { img: '⚡', label: '转雷电', apply: ()=> GameState.player.element = 'lightning' },
+        { img: '🔥', label: '转火焰', apply: ()=> GameState.player.element = 'fire' }
+      ];
+      const shuffled = [...options].sort(()=>Math.random()-0.5);
+      const selected = shuffled.slice(0, 3);
+      cardsDiv.innerHTML = selected.map((opt, i) => `
+        <div class="upgrade-card" data-index="${i}">
+          <div class="card-img" style="background:#4a3a6a;">${opt.img}</div>
+          <div class="card-label">${opt.label}</div>
+        </div>
+      `).join('');
+      document.querySelectorAll('.upgrade-card').forEach(card => {
+        card.onclick = (e) => {
+          const idx = parseInt(e.currentTarget.dataset.index);
+          selected[idx].apply();
+          GameState.battle.nextUpgradeKills += 5;
+          GameState.battle.paused = false;
+          panel.style.display = 'none';
+          updateBattleUI();
+        };
+      });
+      panel.style.display = 'flex';
+    }
+
+    // 移动事件
+    function handleStart(e) {
+      e.preventDefault();
+      if (!battleRunning || GameState.battle.paused) return;
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const canvasX = clientX - rect.left, canvasY = clientY - rect.top;
+      const b = GameState.battle;
+      const offsetX = b.playerWorldX - b.canvasWidth/2;
+      const offsetY = b.playerWorldY - b.canvasHeight/2;
+      b.targetWorldX = offsetX + canvasX; b.targetWorldY = offsetY + canvasY;
+      b.isMoving = true;
+    }
+    function handleMove(e) {
+      e.preventDefault();
+      if (!battleRunning || GameState.battle.paused || !GameState.battle.isMoving) return;
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const canvasX = clientX - rect.left, canvasY = clientY - rect.top;
+      const b = GameState.battle;
+      const offsetX = b.playerWorldX - b.canvasWidth/2;
+      const offsetY = b.playerWorldY - b.canvasHeight/2;
+      b.targetWorldX = offsetX + canvasX; b.targetWorldY = offsetY + canvasY;
+    }
+    function handleEnd(e) { e.preventDefault(); GameState.battle.isMoving = false; }
+    function bindMovementEvents() {
+      canvas.addEventListener('mousedown', handleStart); canvas.addEventListener('mousemove', handleMove); canvas.addEventListener('mouseup', handleEnd);
+      canvas.addEventListener('touchstart', handleStart, {passive: false}); canvas.addEventListener('touchmove', handleMove, {passive: false}); canvas.addEventListener('touchend', handleEnd);
+    }
+    function unbindMovementEvents() {
+      canvas.removeEventListener('mousedown', handleStart); canvas.removeEventListener('mousemove', handleMove); canvas.removeEventListener('mouseup', handleEnd);
+      canvas.removeEventListener('touchstart', handleStart); canvas.removeEventListener('touchmove', handleMove); canvas.removeEventListener('touchend', handleEnd);
+    }
+
+    document.getElementById('skill1Btn').addEventListener('click', castSkill);
+
+    function gameLoop(timestamp) {
+      if (!battleRunning) return;
+      const b = GameState.battle;
+      if (b.paused) { animFrameId = requestAnimationFrame(gameLoop); return; }
+      const dt = Math.min(0.1, (timestamp - b.lastTime)/1000);
+      b.lastTime = timestamp;
+
+      if (b.isMoving) {
+        const dx = b.targetWorldX - b.playerWorldX, dy = b.targetWorldY - b.playerWorldY;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        const speed = (GameState.player.moveSpeed + b.tempMoveSpeed) * 60 * dt;
+        if (dist > 2) {
+          b.playerWorldX += (dx/dist) * Math.min(speed, dist);
+          b.playerWorldY += (dy/dist) * Math.min(speed, dist);
+        }
+      }
+      b.playerWorldX = Math.max(20, Math.min(b.playerWorldX, b.worldWidth-20));
+      b.playerWorldY = Math.max(20, Math.min(b.playerWorldY, b.worldHeight-20));
+
+      /* 🔧修改点6：移动时根据水平移动方向翻转角色 */
+      if (b.isMoving) {
+        const moveDirX = b.targetWorldX - b.playerWorldX;
+        if (Math.abs(moveDirX) > 0.5) {
+          b.facingRight = moveDirX > 0;
+        }
+      }
+      playerGif.style.transform = `scaleX(${b.facingRight ? 1 : -1})`;
+
+      // 切换GIF
+      if (b.isMoving) {
+        if (playerGif.src.indexOf(ASSETS.runGif) === -1) {
+          playerGif.src = ASSETS.runGif;
+        }
+      } else {
+        if (playerGif.src.indexOf(ASSETS.idleGif) === -1) {
+          playerGif.src = ASSETS.idleGif;
+        }
+      }
+
+      GameState.player.mana = Math.min(GameState.player.maxMana, GameState.player.mana + GameState.player.manaRegen*dt);
+      if (b.skillCooldownTimer > 0) b.skillCooldownTimer -= dt;
+
+      for (let enemy of b.enemies) {
+        const dx = b.playerWorldX - enemy.x, dy = b.playerWorldY - enemy.y;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        if (dist > 5) { enemy.x += (dx/dist)*enemy.speed*60*dt; enemy.y += (dy/dist)*enemy.speed*60*dt; }
+      }
+
+      b._attackTimer -= dt;
+      if (b._attackTimer <= 0 && b.enemies.length > 0) {
+        let closest = null, closestDist = Infinity;
+        for (let enemy of b.enemies) {
+          const d = Math.hypot(b.playerWorldX-enemy.x, b.playerWorldY-enemy.y);
+          if (d < GameState.player.attackRange && d < closestDist) { closestDist = d; closest = enemy; }
+        }
+        if (closest) { shootBullets(closest); b._attackTimer = GameState.player.attackCooldown; }
+        else b._attackTimer = 0;
+      }
+
+      for (let bullet of b.bullets) { bullet.x += bullet.vx*60*dt; bullet.y += bullet.vy*60*dt; bullet.life -= dt; }
+      for (let i = b.bullets.length-1; i>=0; i--) {
+        const bullet = b.bullets[i]; let hit = false;
+        for (let j = b.enemies.length-1; j>=0; j--) {
+          const enemy = b.enemies[j];
+          if (Math.hypot(bullet.x-enemy.x, bullet.y-enemy.y) < enemy.size/2 + bullet.size) {
+            enemy.hp -= bullet.damage;
+            b.damageNumbers.push({ x: enemy.x, y: enemy.y-20, value: bullet.damage, alpha:1, life:0.8 });
+            hit = true;
+            if (enemy.hp <= 0) { b.enemies.splice(j,1); b.killCount++; updateMaxEnemies(); if (b.killCount >= b.killTarget) { endBattle(true); return; } }
+            break;
+          }
+        }
+        if (hit || bullet.life <= 0 || bullet.x<0 || bullet.x>b.worldWidth || bullet.y<0 || bullet.y>b.worldHeight) b.bullets.splice(i,1);
+      }
+
+      if (b.invincibleTimer > 0) b.invincibleTimer -= dt;
+      if (b.invincibleTimer <= 0) {
+        for (let enemy of b.enemies) {
+          if (Math.hypot(b.playerWorldX-enemy.x, b.playerWorldY-enemy.y) < enemy.size/2 + 18) {
+            GameState.player.hp -= enemy.atk * dt;
+            b.invincibleTimer = 0.5;
+            if (GameState.player.hp <= 0) { GameState.player.hp=0; updateBattleUI(); endBattle(false); return; }
+          }
+        }
+      }
+
+      for (let dn of b.damageNumbers) { dn.y -= 20*dt; dn.life -= dt; dn.alpha = Math.max(0, dn.life/0.8); }
+      b.damageNumbers = b.damageNumbers.filter(dn => dn.life>0);
+      for (let se of b.skillEffects) { se.life -= dt; se.alpha = se.life/0.4; }
+      b.skillEffects = b.skillEffects.filter(se => se.life>0);
+
+      if (b.enemies.length < b.maxEnemies && Math.random() < 0.04) spawnEnemy();
+      checkUpgrade();
+      
+      const playerScreenX = b.canvasWidth / 2 - ASSETS.playerWidth / 2;
+      const playerScreenY = b.canvasHeight / 2 - ASSETS.playerHeight / 2;
+      playerGif.style.left = playerScreenX + 'px';
+      playerGif.style.top = playerScreenY + 'px';
+      
+      if (b.invincibleTimer > 0 && Math.floor(b.invincibleTimer * 10) % 2 === 0) {
+        playerGif.style.opacity = '0.5';
+      } else {
+        playerGif.style.opacity = '1';
+      }
+
+      renderCanvas();
+      updateBattleUI();
+      animFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    function renderCanvas() {
+      const b = GameState.battle, cw = b.canvasWidth, ch = b.canvasHeight;
+      ctx.clearRect(0,0,cw,ch);
+      const offsetX = b.playerWorldX - cw/2, offsetY = b.playerWorldY - ch/2;
+      ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0,0,cw,ch);
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth=0.5;
+      const grid=60, startX=-offsetX%grid, startY=-offsetY%grid;
+      for (let x=startX; x<cw; x+=grid) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,ch); ctx.stroke(); }
+      for (let y=startY; y<ch; y+=grid) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cw,y); ctx.stroke(); }
+
+      for (let enemy of b.enemies) {
+        const sx = enemy.x-offsetX, sy = enemy.y-offsetY;
+        if (sx<-50||sx>cw+50||sy<-50||sy>ch+50) continue;
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(sx-enemy.size/2, sy-enemy.size/2, enemy.size, enemy.size);
+        ctx.strokeStyle='#000'; ctx.lineWidth=2;
+        ctx.strokeRect(sx-enemy.size/2, sy-enemy.size/2, enemy.size, enemy.size);
+        const hpW=enemy.size;
+        ctx.fillStyle='#333'; ctx.fillRect(sx-hpW/2, sy-enemy.size/2-10, hpW, 6);
+        ctx.fillStyle='#c04040'; ctx.fillRect(sx-hpW/2, sy-enemy.size/2-10, hpW*(enemy.hp/enemy.maxHp), 6);
+        if (enemy.isElite) { ctx.fillStyle='#ff8888'; ctx.font='10px monospace'; ctx.fillText('精英', sx-10, sy-enemy.size/2-14); }
+      }
+
+      for (let bullet of b.bullets) {
+        const sx=bullet.x-offsetX, sy=bullet.y-offsetY;
+        ctx.fillStyle=bullet.color; ctx.fillRect(sx-bullet.size/2, sy-bullet.size/2, bullet.size, bullet.size);
+      }
+
+      for (let se of b.skillEffects) {
+        const sx=se.x-offsetX, sy=se.y-offsetY;
+        ctx.beginPath(); ctx.arc(sx, sy, se.radius, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(${parseInt(se.color.slice(1,3),16)},${parseInt(se.color.slice(3,5),16)},${parseInt(se.color.slice(5,7),16)},${se.alpha*0.5})`;
+        ctx.fill();
+      }
+
+      ctx.font='bold 14px "Courier New"'; ctx.textAlign='center';
+      for (let dn of b.damageNumbers) {
+        const sx=dn.x-offsetX, sy=dn.y-offsetY;
+        ctx.fillStyle = `rgba(255,200,50,${dn.alpha})`;
+        ctx.fillText(`-${dn.value}`, sx, sy);
+      }
+
+      ctx.beginPath();
+      ctx.arc(cw/2, ch/2, GameState.player.attackRange, 0, Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,0.03)';
+      ctx.fill();
+    }
+
+    document.getElementById('enterTowerBtn').addEventListener('click', startBattle);
+    window.addEventListener('resize', ()=>{ if (battleRunning) resizeCanvas(); });
+    renderBase();
+    showScreen('base');
+  })();
+</script>
+</body>
+</html>
