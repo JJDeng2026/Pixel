@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, touch-action: none">
+  <title>星塔之下：织链者</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="game-container" id="gameContainer">
+  <div class="bg-placeholder" id="bgLayer"></div>
+  <div class="pixel-overlay"></div>
+
+  <!-- 像素弹窗 -->
+  <div id="pixelModal" class="pixel-modal">
+    <div class="modal-content">
+      <div class="modal-title" id="modalTitle">提示</div>
+      <div class="modal-message" id="modalMessage">消息内容</div>
+      <button class="modal-btn" id="modalConfirmBtn">确定</button>
+    </div>
+  </div>
+
+  <!-- 基地界面 -->
+  <div id="baseScreen" class="screen active">
+    <div class="content">
+      <div class="base-header">
+        <span class="base-title">⚡织链者基地</span>
+        <div class="resource-bar">
+          <span>🔷<span id="resData">50</span></span>
+          <span>⭐<span id="resCore">2</span></span>
+        </div>
+      </div>
+      
+      <div class="hero-panel" id="heroPanel">
+        <div class="hero-title">✦ 选择英雄 ✦</div>
+        <div class="hero-list" id="heroList"></div>
+      </div>
+
+      <div class="upgrade-grid" id="upgradeGrid"></div>
+
+      <button class="enter-tower-btn" id="enterTowerBtn">▶ 进入巴别塔</button>
+    </div>
+  </div>
+
+  <!-- 战斗界面 -->
+  <div id="battleScreen" class="screen">
+    <div class="battle-canvas-container" id="canvasContainer">
+      <canvas id="gameCanvas"></canvas>
+      <canvas id="joystickCanvas"></canvas>
+      <img id="playerGif" src="" alt="hero" style="width:40px; height:40px;" />
+      <!-- 添加暂停按钮 -->
+      <div class="pause-btn" id="pauseBtn">⏸</div>
+      <div class="battle-ui-overlay">
+        <div class="stat-row">
+          <span>❤️</span><span id="hpText">100</span>/<span id="maxHpText">100</span>
+          <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpFill"></div></div>
+        </div>
+        <div class="stat-row">
+          <span>💙</span><span id="manaText">50</span>/<span id="maxManaText">50</span>
+          <div class="mana-bar-bg"><div class="mana-bar-fill" id="manaFill"></div></div>
+        </div>
+        <div class="progress-row">
+          <span>击杀 <span id="killCount">0</span>/<span id="killTarget">15</span></span>
+          <span>🔫<span id="bulletCount">1</span>颗</span>
+          <span>⚡临时攻击+<span id="tempAtk">0</span></span>
+          <span id="elementDisplay">🔥火</span>
+        </div>
+      </div>
+      <div class="skill-btn-overlay">
+        <button class="skill-btn" id="skill1Btn">🔥 火焰弹 (20)</button>
+      </div>
+      <div class="upgrade-panel" id="upgradePanel">
+        <div class="upgrade-title">⬆️ 选择强化</div>
+        <div class="upgrade-cards" id="upgradeCards"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结算界面 -->
+  <div id="resultScreen" class="screen">
+    <div class="content" style="justify-content: center;">
+      <div class="result-panel" id="resultPanel"></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/gameState.js"></script>
+<script src="js/joystick.js"></script>
+<script src="js/battleCore.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
