@@ -1,0 +1,785 @@
+/**
+ * ============================================
+ * 像素肉鸽游戏 - 样式表 - 全面像素UI升级
+ * 所有UI元素使用像素风格PNG素材
+ * ============================================
+ */
+
+/* ========== 基础重置 ========== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    background: #1a1a2e;
+}
+
+/* ========== 强制竖屏模式 ========== */
+.portrait-mode {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+@media screen and (orientation: landscape) and (max-height: 500px) {
+    body::before {
+        content: "请旋转设备至竖屏模式";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #1a1a2e;
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 24px;
+        z-index: 99999;
+        text-align: center;
+    }
+}
+
+/* ========== 通用隐藏类 ========== */
+.hidden {
+    display: none !important;
+}
+
+/* ========== 主菜单样式 ========== */
+.menu-screen {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.menu-container {
+    width: 100%;
+    max-width: 450px;
+    text-align: center;
+}
+
+.game-title {
+    font-size: clamp(28px, 8vw, 48px);
+    color: #ffd700;
+    text-shadow: 3px 3px 0 #8b4513, 0 0 20px rgba(255, 215, 0, 0.5);
+    margin-bottom: 10px;
+    font-weight: bold;
+    letter-spacing: 3px;
+}
+
+.game-subtitle {
+    font-size: clamp(12px, 3vw, 16px);
+    color: #888;
+    margin-bottom: 30px;
+    letter-spacing: 1px;
+}
+
+.player-stats-preview {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 10px 20px;
+    border-radius: 20px;
+    color: #fff;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stat-icon {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.stat-item:nth-child(1) .stat-icon {
+    background-image: url('../assets/images/ui/icon_gold.png');
+}
+.stat-item:nth-child(2) .stat-icon {
+    background-image: url('../assets/images/ui/icon_diamond.png');
+}
+.stat-item:nth-child(3) .stat-icon {
+    background-image: url('../assets/images/ui/icon_star.png');
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+/* ========== 像素风格按钮 ========== */
+.menu-btn {
+    padding: 0;
+    font-size: 0;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 280px;
+    height: 70px;
+    margin: 0 auto;
+    background: url('../assets/images/ui/btn_start.png') center/cover no-repeat;
+}
+
+.menu-btn:hover {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+}
+
+.menu-btn:active {
+    transform: scale(0.98);
+}
+
+.primary-btn {
+    background: url('../assets/images/ui/btn_start.png') center/cover no-repeat;
+}
+
+.secondary-btn {
+    background: url('../assets/images/ui/btn_buy.png') center/cover no-repeat;
+    filter: hue-rotate(200deg) brightness(0.9);
+    width: 240px;
+    height: 60px;
+}
+
+.gm-btn {
+    background: url('../assets/images/ui/btn_buy.png') center/cover no-repeat;
+    filter: hue-rotate(270deg);
+    width: 200px;
+    height: 50px;
+}
+
+.game-info {
+    color: #888;
+    font-size: 14px;
+}
+
+.game-info p {
+    margin: 5px 0;
+}
+
+/* ========== 游戏界面样式 ========== */
+.game-screen {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #0a0a15;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 游戏HUD - 像素风格血条经验条 */
+.game-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    z-index: 100;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+}
+
+.hud-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.health-bar, .exp-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hud-label {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.health-bar .hud-label {
+    background-image: url('../assets/images/ui/icon_heart.png');
+}
+
+.exp-bar .hud-label {
+    background-image: url('../assets/images/ui/icon_star.png');
+}
+
+.bar-container {
+    width: clamp(100px, 30vw, 180px);
+    height: 20px;
+    background: url('../assets/images/ui/bar_health.png') left/auto 100% no-repeat;
+    overflow: hidden;
+    position: relative;
+}
+
+.bar-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+    mix-blend-mode: multiply;
+}
+
+.health-fill {
+    background: linear-gradient(90deg, #ff0000, #ff4444);
+    opacity: 0.9;
+}
+
+.exp-bar .bar-container {
+    background: url('../assets/images/ui/bar_exp.png') left/auto 100% no-repeat;
+}
+
+.exp-fill {
+    background: linear-gradient(90deg, #00ff00, #44ff44);
+    opacity: 0.9;
+}
+
+.hud-right {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    text-align: right;
+}
+
+.hud-stat {
+    color: #fff;
+    font-size: clamp(10px, 2.5vw, 14px);
+    text-shadow: 2px 2px 0 #000;
+}
+
+/* 画布容器 */
+.canvas-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#gameCanvas {
+    background: #1a2a1a;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* ========== 移动端控制区域 ========== */
+.mobile-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: clamp(150px, 25vh, 220px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    z-index: 200;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+    pointer-events: none;
+}
+
+/* 虚拟摇杆 - 像素风格 */
+.joystick-area {
+    width: clamp(100px, 25vw, 160px);
+    height: clamp(100px, 25vw, 160px);
+    pointer-events: auto;
+}
+
+.joystick {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.15);
+    border: 4px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    position: relative;
+    backdrop-filter: blur(5px);
+}
+
+.joystick-knob {
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.95), rgba(200,200,200,0.8));
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.5);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    transition: transform 0.1s ease;
+}
+
+/* 技能按钮 - 像素风格 */
+.skill-buttons-area {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.skill-row {
+    display: flex;
+    gap: 10px;
+}
+
+.skill-btn {
+    width: clamp(50px, 12vw, 70px);
+    height: clamp(50px, 12vw, 70px);
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.15s ease;
+}
+
+.skill-btn:active {
+    transform: scale(0.9);
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.3);
+}
+
+.skill-btn.on-cooldown {
+    opacity: 0.5;
+    filter: grayscale(0.8);
+}
+
+.skill-icon {
+    font-size: clamp(20px, 5vw, 28px);
+    display: block;
+}
+
+.skill-cooldown {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    font-size: 10px;
+    text-align: center;
+    padding: 2px 0;
+}
+
+/* 暂停按钮 - 像素风格 */
+.pause-btn {
+    position: absolute;
+    top: 60px;
+    right: 15px;
+    width: 50px;
+    height: 50px;
+    border: none;
+    background: url('../assets/images/ui/btn_pause.png') center/cover no-repeat;
+    color: transparent;
+    font-size: 0;
+    cursor: pointer;
+    z-index: 150;
+    transition: transform 0.2s ease;
+}
+
+.pause-btn:hover {
+    transform: scale(1.1);
+}
+
+.pause-btn:active {
+    transform: scale(0.95);
+}
+
+/* ========== 覆盖层界面通用样式 ========== */
+.overlay-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+/* 升级选择界面 - 像素卡片 */
+.levelup-container {
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+}
+
+.levelup-title {
+    color: #ffd700;
+    font-size: clamp(20px, 5vw, 28px);
+    margin-bottom: 30px;
+    text-shadow: 3px 3px 0 #000, 0 0 20px rgba(255, 215, 0, 0.5);
+    letter-spacing: 2px;
+}
+
+.levelup-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.levelup-option {
+    background: url('../assets/images/ui/panel_card.png') center/cover no-repeat;
+    padding: 35px 25px 25px 25px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #fff;
+}
+
+.levelup-option:hover {
+    transform: scale(1.03);
+    filter: brightness(1.3);
+}
+
+.levelup-option:active {
+    transform: scale(0.98);
+}
+
+.levelup-option h3 {
+    color: #ffd700;
+    margin-bottom: 8px;
+    font-size: 18px;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.levelup-option p {
+    color: #ddd;
+    font-size: 14px;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* 商店/升级/GM界面 */
+.shop-container, .upgrade-container, .gm-container {
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 4px solid #555;
+    border-radius: 0;
+    padding: 25px;
+    overflow-y: auto;
+}
+
+.shop-title, .upgrade-title, .gm-title {
+    color: #ffd700;
+    font-size: 24px;
+    text-align: center;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 0 #000;
+    letter-spacing: 2px;
+}
+
+.shop-currency, .upgrade-currency {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 20px;
+    color: #fff;
+    font-size: 16px;
+}
+
+.shop-items, .upgrade-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.shop-item, .upgrade-item {
+    background: rgba(0, 0, 0, 0.5);
+    border: 3px solid #444;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+}
+
+.shop-item-info h4, .upgrade-item-info h4 {
+    margin-bottom: 5px;
+}
+
+.shop-item-info p, .upgrade-item-info p {
+    color: #888;
+    font-size: 12px;
+}
+
+.buy-btn, .upgrade-item-btn {
+    background: url('../assets/images/ui/btn_buy.png') center/cover no-repeat;
+    border: none;
+    color: #fff;
+    font-weight: bold;
+    text-shadow: 1px 1px 0 #000;
+    padding: 12px 24px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.buy-btn:hover, .upgrade-item-btn:hover {
+    filter: brightness(1.2);
+}
+
+.buy-btn:disabled, .upgrade-item-btn:disabled {
+    filter: grayscale(1) opacity(0.5);
+    cursor: not-allowed;
+}
+
+.close-btn {
+    background: url('../assets/images/ui/btn_close.png') center/cover no-repeat;
+    border: none;
+    color: transparent;
+    font-size: 0;
+    width: 60px;
+    height: 60px;
+    cursor: pointer;
+    display: block;
+    margin: 0 auto;
+    transition: transform 0.2s ease;
+}
+
+.close-btn:hover {
+    transform: scale(1.1);
+}
+
+/* GM后台样式 */
+.gm-section {
+    margin-bottom: 25px;
+}
+
+.gm-section h3 {
+    color: #ffd700;
+    margin-bottom: 15px;
+    font-size: 16px;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.gm-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gm-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.gm-control label {
+    color: #fff;
+    min-width: 50px;
+}
+
+.gm-control input {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px 12px;
+    border: 2px solid #555;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-family: monospace;
+}
+
+.gm-btn {
+    background: url('../assets/images/ui/btn_confirm.png') center/cover no-repeat;
+    border: none;
+    color: #fff;
+    font-weight: bold;
+    text-shadow: 1px 1px 0 #000;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.gm-btn:hover {
+    filter: brightness(1.2);
+}
+
+.gm-btn.add {
+    filter: hue-rotate(90deg);
+}
+
+.gm-btn.warning {
+    filter: hue-rotate(320deg);
+}
+
+/* 游戏结束界面 - 像素面板 */
+.gameover-container, .pause-container {
+    text-align: center;
+    color: #fff;
+    background: url('../assets/images/ui/panel_gameover.png') center/cover no-repeat;
+    padding: 70px 50px 50px 50px;
+}
+
+.gameover-title, .pause-title {
+    font-size: clamp(24px, 6vw, 36px);
+    color: #ff4444;
+    margin-bottom: 30px;
+    text-shadow: 3px 3px 0 #000, 0 0 20px rgba(255, 68, 68, 0.5);
+    letter-spacing: 3px;
+}
+
+.gameover-stats {
+    background: rgba(0, 0, 0, 0.6);
+    border: 3px solid #666;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.gameover-stats p {
+    font-size: clamp(14px, 4vw, 18px);
+    margin: 10px 0;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.reward-text {
+    color: #ffd700;
+    font-weight: bold;
+    margin-top: 20px !important;
+}
+
+.gameover-buttons, .pause-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* ========== 响应式适配 ========== */
+@media (min-width: 768px) {
+    .mobile-controls {
+        padding: 30px 50px;
+    }
+    
+    .joystick-area {
+        width: 180px;
+        height: 180px;
+    }
+    
+    .skill-btn {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .skill-icon {
+        font-size: 32px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .mobile-controls {
+        opacity: 0.6;
+    }
+    
+    .mobile-controls::after {
+        content: "WASD移动 | 空格/1234释放技能";
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba(255,255,255,0.6);
+        font-size: 12px;
+    }
+}
+
+/* ========== 滚动条样式 ========== */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+/* ========== 扩展预留区域 ========== */
+.skin-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    padding: 20px;
+}
+
+.skin-item {
+    aspect-ratio: 1;
+    border: 3px solid transparent;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.skin-item.selected {
+    border-color: #ffd700;
+}
+
+.level-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 15px;
+    padding: 20px;
+}
+
+.level-node {
+    aspect-ratio: 1;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.level-node.locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
