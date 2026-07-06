@@ -669,13 +669,13 @@ class Game{
     constructor(){
         this.canvas=document.getElementById('gameCanvas');
         this.ctx=this.canvas.getContext('2d');
+        this.joystick=new Joystick();
         this.resize();
         this.sceneIdx=DB.data.scene-1;
         this.sceneCfg=CFG.SCENES[this.sceneIdx];
         this.worldW=this.sceneCfg.width;
         this.groundY=this.gameH*0.82;
         this.camX=0;
-        this.joystick=new Joystick();
         this.player=new Player(150,this.groundY-60);
         this.player.weapon=DB.data.weapon;
         this.enemies=[];
@@ -964,8 +964,8 @@ class Game{
             if(this.state==='playing') this.update(dt);
             this.render();
         } catch(e) {
-            console.error('Game loop error:', e);
-        }
+             console.error('Game loop error:', e&&e.message?e.message:e, e&&e.stack?e.stack:'');
+         }
         requestAnimationFrame(t=>this.gameLoop(t));
     }
     update(dt){
@@ -1231,7 +1231,7 @@ function startGame(){
         if(_game) { _game.running=false; }
         _game=new Game();
     } catch(e) {
-        console.error('startGame error:', e);
+        console.error('startGame error:', e&&e.message?e.message:e, e&&e.stack?e.stack:'');
     }
 }
 window.startGame=startGame;
