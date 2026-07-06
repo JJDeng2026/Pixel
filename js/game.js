@@ -677,6 +677,7 @@ class Game{
         this.camX=0;
         this.joystick=new Joystick();
         this.player=new Player(150,this.groundY-60);
+        this.player.weapon=DB.data.weapon;
         this.enemies=[];
         this.boss=null;
         this.particles=[];
@@ -1152,6 +1153,7 @@ class Game{
         this.sceneCfg=CFG.SCENES[this.sceneIdx];
         this.worldW=this.sceneCfg.width;
         this.player.hp=this.player.maxHp;
+        this.player.weapon=DB.data.weapon;
         this.state='playing';
         this.gameOverCause='';
         this.victoryScene=false;
