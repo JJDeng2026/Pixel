@@ -94,5 +94,31 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'SimHei','PingFang 
     .joystick-zone{width:150px;height:150px;}
 }
 @media(min-width:1024px){
-    .mobile-ctrl::after{content:'WASD移动 | 空格/1234技能';position:absolute;bottom:5px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.4);font-size:11px;white-space:nowrap;}
+    .mobile-ctrl::after{content:'WASD移动 | 123释放道具';position:absolute;bottom:5px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.4);font-size:11px;white-space:nowrap;}
 }
+
+/* ========== 道具栏 ========== */
+.item-bar{display:flex;gap:8px;margin-top:10px;pointer-events:auto;}
+.item-slot{width:44px;height:44px;border:2px solid rgba(200,168,78,0.4);background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;transition:all 0.2s;}
+.item-slot:hover{transform:scale(1.1);border-color:#c8a84e;}
+.item-filled{background:rgba(200,168,78,0.15);border-color:rgba(200,168,78,0.7);}
+.item-empty{border-style:dashed;opacity:0.5;}
+.item-cooldown{filter:grayscale(0.7);opacity:0.6;}
+.item-icon{font-size:20px;}
+.item-img{width:32px;height:32px;object-fit:contain;}
+.item-key{position:absolute;top:2px;left:4px;font-size:10px;color:rgba(255,255,255,0.5);font-weight:bold;}
+.item-cd{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.8);color:#ff4444;font-size:9px;text-align:center;padding:1px 0;}
+
+/* ========== 加载界面 ========== */
+#loadOverlay{position:fixed;inset:0;background:#0a0a12;display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.5s;}
+#loadOverlay.load-done{opacity:0;pointer-events:none;}
+.load-content{text-align:center;color:#c8a84e;}
+.load-spinner{width:50px;height:50px;border:3px solid rgba(200,168,78,0.2);border-top-color:#c8a84e;border-radius:50%;margin:0 auto 20px;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.load-content p{font-size:16px;margin-bottom:15px;letter-spacing:2px;}
+.load-bar{width:200px;height:4px;background:rgba(255,255,255,0.1);margin:0 auto;overflow:hidden;}
+.load-bar-fill{height:100%;width:0%;background:linear-gradient(90deg,#c8a84e,#e0c060);transition:width 0.3s;}
+
+/* ========== 技能特效遮罩 ========== */
+.skill-flash{position:fixed;inset:0;pointer-events:none;z-index:50;animation:flashIn 0.5s ease-out forwards;}
+@keyframes flashIn{0%{background:rgba(200,168,78,0.3);}100%{background:rgba(200,168,78,0);}}
