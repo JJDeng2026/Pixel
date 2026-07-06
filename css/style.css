@@ -1,11 +1,11 @@
-/* 王国守卫 - 塔防 v6.0 */
+/* 火柴人战斗 v1.0 */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
 html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Microsoft YaHei','SimHei',sans-serif;background:#0a0a1a;color:#e0d8c8;}
 
 .screen{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;}
 .hidden{display:none!important;}
 
-/* 加载覆盖层 */
+/* 加载 */
 #loadOverlay{position:fixed;inset:0;background:#0a0a1a;display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.5s;}
 #loadOverlay.load-done{opacity:0;pointer-events:none;}
 .load-content{text-align:center;color:#c8a84e;}
@@ -16,142 +16,55 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Micr
 .load-bar-fill{height:100%;background:#ffcc00;transition:width 0.2s;width:0;border-radius:2px;}
 
 /* 主菜单 */
-.menu-bg{position:absolute;inset:0;background:url('assets/images/td_bg.jpg') center/cover;filter:brightness(0.3) saturate(0.5);z-index:0;}
-.menu-bg::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,30,0.7) 0%,rgba(10,10,30,0.9) 100%);}
-.menu-content{position:relative;z-index:1;text-align:center;padding:15px;max-width:420px;width:100%;}
-.title-area{margin-bottom:20px;}
-.game-title{font-size:clamp(28px,7vw,48px);color:#ffcc00;text-shadow:0 0 20px rgba(255,204,0,0.4),0 3px 6px rgba(0,0,0,0.6);letter-spacing:8px;font-weight:900;}
-.game-subtitle{font-size:clamp(16px,4vw,24px);color:#c8a84e;margin-top:4px;letter-spacing:6px;}
+#mainMenu{background:linear-gradient(180deg,#0a0a1a 0%,#151530 50%,#0a0a1a 100%);}
+.menu-content{text-align:center;padding:20px;max-width:420px;width:100%;}
+.game-title{font-size:clamp(28px,7vw,44px);color:#ffcc00;text-shadow:0 0 20px rgba(255,204,0,0.4),0 3px 6px rgba(0,0,0,0.6);letter-spacing:6px;font-weight:900;margin-bottom:2px;}
+.game-subtitle{font-size:clamp(12px,3vw,18px);color:#c8a84e;margin-bottom:20px;letter-spacing:4px;}
 
-.menu-stats{display:flex;justify-content:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
-.mstat{background:rgba(0,0,0,0.6);border:1px solid rgba(255,204,0,0.3);padding:5px 10px;font-size:12px;color:#ffcc00;border-radius:4px;display:flex;align-items:center;gap:5px;}
-.ms-label{color:#999;font-size:10px;}
+.menu-section{margin-bottom:14px;}
+.section-title{color:#c8a84e;font-size:13px;margin-bottom:6px;font-weight:bold;letter-spacing:2px;}
 
-/* 关卡选择 */
-.stage-select{margin-bottom:14px;}
-.stage-label{color:#c8a84e;font-size:13px;margin-bottom:6px;font-weight:bold;letter-spacing:2px;}
-.stage-grid{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;}
-.stage-btn{width:56px;height:56px;border:2px solid rgba(255,204,0,0.3);background:rgba(0,0,0,0.5);color:#c8a84e;cursor:pointer;font-size:20px;font-weight:bold;transition:all 0.2s;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-.stage-btn:hover,.stage-btn:active{border-color:#ffcc00;background:rgba(255,204,0,0.15);transform:scale(1.05);}
-.stage-btn.locked{opacity:0.4;cursor:not-allowed;border-color:rgba(255,255,255,0.1);color:#666;}
-.stage-btn .st-num{font-size:18px;line-height:1;}
-.stage-btn .st-name{font-size:9px;color:#999;}
+/* 武器选择 */
+.weapon-grid{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;}
+.weapon-btn{width:50px;height:50px;border:2px solid rgba(255,204,0,0.3);background:rgba(0,0,0,0.5);color:#c8a84e;cursor:pointer;font-size:14px;font-weight:bold;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.weapon-btn:hover,.weapon-btn:active{border-color:#ffcc00;background:rgba(255,204,0,0.15);}
+.weapon-btn.selected{border-color:#ffcc00;background:rgba(255,204,0,0.2);color:#ffcc00;box-shadow:0 0 10px rgba(255,204,0,0.3);}
 
-.menu-btns{display:flex;flex-direction:column;gap:8px;align-items:center;}
-.btn-primary,.btn-secondary,.btn-gm,.btn-close,.btn-danger{border:none;cursor:pointer;font-family:inherit;font-weight:bold;transition:all 0.2s;letter-spacing:2px;border-radius:4px;outline:none;}
-.btn-primary{background:linear-gradient(180deg,#ffcc00,#b8960a);color:#1a1000;padding:12px 50px;font-size:18px;border:2px solid #ffe060;box-shadow:0 0 15px rgba(255,204,0,0.3);}
-.btn-primary:active{transform:scale(0.96);}
-.btn-secondary{background:linear-gradient(180deg,#4a4a5a,#2a2a3a);color:#c8a84e;padding:10px 40px;font-size:15px;border:2px solid #5a5a6a;}
-.btn-secondary:active{transform:scale(0.96);}
-.btn-gm{background:linear-gradient(180deg,#3a1a2a,#1a0a1a);color:#a06080;padding:8px 28px;font-size:13px;border:1px solid #5a2a4a;}
-.btn-close{background:rgba(255,255,255,0.1);color:#999;padding:8px 25px;font-size:13px;border:1px solid #444;margin-top:12px;}
-.btn-danger{background:#5a1a1a;color:#ff8888;padding:6px 14px;font-size:12px;border:1px solid #8a2a2a;}
+/* 场景选择 */
+.scene-grid{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;max-height:160px;overflow-y:auto;}
+.scene-btn{width:52px;min-height:44px;border:2px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#e0d8c8;cursor:pointer;font-size:11px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all 0.2s;padding:4px;}
+.scene-btn:hover,.scene-btn:active{border-color:#ffcc00;background:rgba(255,204,0,0.1);}
+.scene-btn.locked{opacity:0.35;cursor:not-allowed;border-color:rgba(255,255,255,0.05);color:#555;}
+.scene-btn .sc-num{font-size:16px;font-weight:bold;color:#ffcc00;line-height:1.1;}
+.scene-btn.locked .sc-num{color:#555;}
+.scene-btn .sc-name{font-size:9px;color:#999;}
+
+.menu-stats{display:flex;justify-content:center;gap:15px;margin-bottom:16px;font-size:12px;color:#999;flex-wrap:wrap;}
+.menu-stats span{color:#aaa;}
+.menu-stats span span{color:#ffcc00;font-weight:bold;}
+
+.btn-start{background:linear-gradient(180deg,#ffcc00,#b8960a);color:#1a1000;border:none;padding:12px 50px;font-size:18px;font-weight:bold;cursor:pointer;letter-spacing:4px;border-radius:6px;border:2px solid #ffe060;box-shadow:0 0 20px rgba(255,204,0,0.3);transition:all 0.2s;font-family:inherit;margin-bottom:14px;}
+.btn-start:active{transform:scale(0.95);}
+
+.controls-hint{font-size:10px;color:#555;line-height:1.6;}
+.controls-hint p{margin:2px 0;}
 
 /* 游戏界面 */
-#gameScreen{background:#0a0a1a;overflow:hidden;}
-#gameCanvas{display:block;position:absolute;top:0;left:0;}
+#gameScreen{background:#000;overflow:hidden;}
+#gameCanvas{display:block;}
 
-.game-hud{position:absolute;top:6px;left:6px;right:6px;z-index:10;pointer-events:none;}
-.hud-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;}
-.hud-label{font-size:10px;color:#999;text-shadow:1px 1px 2px #000;}
-.hud-val{font-size:12px;color:#ffcc00;font-weight:bold;text-shadow:1px 1px 2px #000;}
-
-.hud-hp-bar{position:relative;height:14px;background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.15);overflow:hidden;border-radius:3px;width:100%;max-width:180px;display:flex;align-items:center;justify-content:center;}
-.hud-hp-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#cc3333,#ff5555);transition:width 0.3s;}
-.hud-hp-text{position:relative;z-index:1;font-size:9px;color:#fff;text-shadow:1px 1px 2px #000;font-weight:bold;}
-
-.hud-xp-bar{position:relative;height:8px;background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.1);overflow:hidden;border-radius:2px;width:100%;max-width:120px;}
-.hud-xp-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#3388cc,#55aaff);transition:width 0.3s;}
-
-/* 村落血条 */
-.hud-village-bar{position:relative;height:14px;background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.15);overflow:hidden;border-radius:3px;width:100%;max-width:160px;display:flex;align-items:center;justify-content:center;flex:1;}
-.hud-village-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#cc3333,#ff8800,#44cc44);transition:width 0.3s;}
-
-/* 技能按钮 */
-.skill-btns{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:14px;z-index:20;pointer-events:auto;}
-.btn-skill{position:relative;width:50px;height:50px;border:2px solid rgba(255,204,0,0.4);background:rgba(0,0,0,0.6);border-radius:12px;cursor:pointer;overflow:hidden;padding:0;transition:all 0.2s;}
-.btn-skill:active{transform:scale(0.9);border-color:#ffcc00;}
-.btn-skill.on-cd{filter:grayscale(0.8);opacity:0.5;}
-.skill-icon{width:100%;height:100%;object-fit:cover;}
-.skill-cd{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#ff6666;font-size:10px;text-align:center;padding:2px;font-weight:bold;}
-
-.btn-pause{position:absolute;top:6px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.6);border:2px solid rgba(255,255,255,0.3);color:#fff;font-size:14px;cursor:pointer;z-index:20;pointer-events:auto;display:flex;align-items:center;justify-content:center;font-weight:bold;}
-
-/* 覆盖层 */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
-.overlay-card{background:linear-gradient(180deg,#1a1a2e,#0d0d18);border:2px solid #c8a84e;padding:20px;max-width:380px;width:100%;text-align:center;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
-.wide-card{max-width:420px;}
-.overlay-title{font-size:clamp(16px,4vw,22px);color:#ffcc00;margin-bottom:16px;text-shadow:0 0 10px rgba(255,204,0,0.3);}
-.death-title{color:#cc4444;text-shadow:0 0 10px rgba(204,68,68,0.3);}
-
-/* 波次信息 */
-.wave-info{font-size:13px;color:#ccc;margin-bottom:12px;line-height:1.6;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
-.enemy-tag{background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;font-size:11px;color:#e0d8c8;border:1px solid rgba(255,204,0,0.2);}
-
-/* 游戏结束 */
-.go-cause{font-size:15px;color:#ff8888;margin-bottom:12px;}
-.go-stats{background:rgba(0,0,0,0.4);padding:12px;margin-bottom:14px;text-align:left;border-radius:4px;}
-.go-stat{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:#ccc;}
-.go-stat span:first-child{color:#999;}
-.go-stat span:last-child{color:#ffcc00;font-weight:bold;}
-
-/* 英雄强化 */
-.upgrade-gold{color:#ffcc00;margin-bottom:10px;font-size:14px;}
-.upgrade-list{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;max-height:45vh;overflow-y:auto;}
-.upgrade-item{display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);padding:8px 10px;border-radius:4px;cursor:pointer;transition:all 0.2s;}
-.upgrade-item:hover,.upgrade-item:active{background:rgba(255,204,0,0.1);border-color:rgba(255,204,0,0.3);}
-.upgrade-item .ui-info{text-align:left;}
-.upgrade-item .ui-name{color:#ffcc00;font-weight:bold;font-size:12px;}
-.upgrade-item .ui-desc{color:#888;font-size:10px;margin-top:1px;}
-
-/* GM后台 */
-.gm-section{display:flex;flex-direction:column;gap:8px;}
-.gm-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.gm-row label{color:#ffcc00;min-width:35px;font-size:12px;}
-.gm-row input{width:80px;padding:5px 8px;background:rgba(255,255,255,0.1);border:1px solid #555;color:#fff;font-family:inherit;border-radius:3px;font-size:13px;}
-.gm-row button{background:rgba(255,255,255,0.1);border:1px solid #555;color:#ccc;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit;border-radius:3px;}
-
-/* 升级选项 */
-.options-grid{display:flex;flex-direction:column;gap:6px;max-height:45vh;overflow-y:auto;}
-.level-option{background:rgba(0,0,0,0.5);border:1px solid rgba(255,204,0,0.3);padding:10px 12px;color:#e0d8c8;cursor:pointer;text-align:left;transition:all 0.2s;border-radius:4px;}
-.level-option:hover,.level-option:active{background:rgba(255,204,0,0.1);border-color:#ffcc00;transform:scale(1.02);}
-.lo-name{font-size:14px;color:#ffcc00;font-weight:bold;display:block;margin-bottom:2px;}
-.lo-desc{font-size:11px;color:#999;}
-
-/* 游戏结束按钮 */
-.go-btns{display:flex;flex-direction:column;gap:8px;align-items:center;}
-
-/* 英雄强化列表 */
-.up-name{color:#ffcc00;font-weight:bold;font-size:12px;}
-.up-desc{color:#888;font-size:10px;margin-top:2px;}
-.up-cost{color:#ffcc00;font-size:11px;font-weight:bold;min-width:65px;text-align:right;}
-
-/* ===== 响应式 ===== */
-/* 移动端（默认） */
+/* 响应式 */
 @media(max-width:480px){
-    .menu-content{padding:10px;max-width:100%;}
-    .game-title{font-size:clamp(24px,8vw,36px);letter-spacing:5px;}
-    .game-subtitle{font-size:clamp(14px,5vw,20px);letter-spacing:3px;}
-    .stage-btn{width:48px;height:48px;font-size:18px;}
-    .stage-btn .st-num{font-size:16px;}
-    .btn-primary{padding:10px 36px;font-size:16px;}
-    .btn-secondary{padding:8px 30px;font-size:14px;}
-    .skill-btns{bottom:12px;gap:12px;}
-    .btn-skill{width:46px;height:46px;}
-    .overlay-card{padding:16px;max-width:95%;}
+    .menu-content{padding:12px;max-width:100%;}
+    .game-title{font-size:clamp(24px,8vw,36px);letter-spacing:4px;}
+    .btn-start{padding:10px 40px;font-size:16px;}
+    .weapon-btn{width:44px;height:44px;}
+    .scene-btn{width:46px;min-height:40px;}
+    .scene-btn .sc-num{font-size:14px;}
 }
 
-/* 平板竖屏 */
-@media(min-width:481px) and (max-width:768px){
-    .menu-content{padding:15px;max-width:400px;}
-}
-
-/* PC端 */
 @media(min-width:769px){
     #gameScreen{max-width:520px;max-height:880px;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:8px;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,0.5);}
-    .game-hud{top:10px;left:10px;right:auto;min-width:200px;}
-    .btn-pause{top:10px;right:10px;}
-    .skill-btns{bottom:20px;gap:16px;}
-    .btn-skill{width:54px;height:54px;}
-    .overlay-card{max-width:400px;padding:24px;}
+    #gameCanvas{max-width:100%;max-height:100%;}
+    #mainMenu{max-width:500px;margin:0 auto;}
 }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>王国守卫 - 塔防</title>
+<title>火柴人战斗</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -21,24 +21,30 @@
 
 <!-- 主菜单 -->
 <div id="mainMenu" class="screen">
-    <div class="menu-bg"></div>
     <div class="menu-content">
-        <div class="title-area">
-            <div class="game-title">王国守卫</div>
-            <div class="game-subtitle">塔防之战</div>
+        <div class="game-title">火柴人战斗</div>
+        <div class="game-subtitle">STICKMAN FIGHTER</div>
+
+        <div class="menu-section">
+            <div class="section-title">选择武器</div>
+            <div class="weapon-grid" id="weaponGrid"></div>
         </div>
+
+        <div class="menu-section">
+            <div class="section-title">选择关卡</div>
+            <div class="scene-grid" id="sceneGrid"></div>
+        </div>
+
         <div class="menu-stats">
-            <div class="mstat"><span class="ms-label">最高波次</span><span id="mHighWave">0</span></div>
-            <div class="mstat"><span class="ms-label">金币</span><span id="mGold">0</span></div>
-            <div class="mstat"><span class="ms-label">总击杀</span><span id="mKills">0</span></div>
+            <span>已解锁: 第<span id="menuMaxScene">1</span>关</span>
+            <span>武器: <span id="menuWeapon">剑</span></span>
         </div>
-        <div class="stage-select">
-            <div class="stage-label">选择关卡</div>
-            <div class="stage-grid" id="stageGrid"></div>
-        </div>
-        <div class="menu-btns">
-            <button id="btnUpgrade" class="btn-secondary">英雄强化</button>
-            <button id="btnGM" class="btn-gm">GM后台</button>
+
+        <button class="btn-start" onclick="startGame()">开始战斗</button>
+
+        <div class="controls-hint">
+            <p>PC: WASD 移动 | J 攻击 | K 跳跃 | L 技能</p>
+            <p>移动端: 左摇杆移动 | 右按钮操作</p>
         </div>
     </div>
 </div>
@@ -46,123 +52,6 @@
 <!-- 游戏界面 -->
 <div id="gameScreen" class="screen hidden">
     <canvas id="gameCanvas"></canvas>
-    <div class="game-hud">
-        <div class="hud-row">
-            <span class="hud-label">波次</span><span id="hudWave" class="hud-val">1/20</span>
-            <span class="hud-label">击杀</span><span id="hudKills" class="hud-val">0</span>
-            <span class="hud-label">金币</span><span id="hudGold" class="hud-val">0</span>
-        </div>
-        <div class="hud-row">
-            <span class="hud-label">Lv</span><span id="hudLevel" class="hud-val">1</span>
-            <div class="hud-xp-bar"><div id="hudXpFill" class="hud-xp-fill"></div></div>
-        </div>
-        <div class="hud-row">
-            <span class="hud-label">村落</span>
-            <div class="hud-village-bar"><div id="hudVillageFill" class="hud-village-fill"></div><span id="hudVillageHp" class="hud-hp-text">200/200</span></div>
-        </div>
-        <div class="hud-row">
-            <div class="hud-hp-bar"><div id="hudHpFill" class="hud-hp-fill"></div><span id="hudHpText" class="hud-hp-text">120/120</span></div>
-        </div>
-    </div>
-    <button id="btnPause" class="btn-pause">||</button>
-    <div class="skill-btns">
-        <button id="btnSkill1" class="btn-skill" title="火球术">
-            <img src="assets/images/td_skill_fire.jpg" class="skill-icon" alt="火球术">
-            <span class="skill-cd" id="skillCd1"></span>
-        </button>
-        <button id="btnSkill2" class="btn-skill" title="冰霜剑">
-            <img src="assets/images/td_skill_ice.jpg" class="skill-icon" alt="冰霜剑">
-            <span class="skill-cd" id="skillCd2"></span>
-        </button>
-    </div>
-</div>
-
-<!-- 升级选择 -->
-<div id="levelUpScreen" class="overlay hidden">
-    <div class="overlay-card">
-        <div class="overlay-title">升级! 选择强化</div>
-        <div id="levelUpOptions" class="options-grid"></div>
-    </div>
-</div>
-
-<!-- 波次过渡 -->
-<div id="waveScreen" class="overlay hidden">
-    <div class="overlay-card">
-        <div class="overlay-title">第 <span id="waveNum">1</span> 波</div>
-        <div id="wavePreview" class="wave-info"></div>
-        <button id="btnWaveStart" class="btn-primary">开始战斗</button>
-    </div>
-</div>
-
-<!-- 游戏结束 -->
-<div id="gameOverScreen" class="overlay hidden">
-    <div class="overlay-card">
-        <div class="overlay-title death-title">防线失守</div>
-        <div id="goVillage" class="go-cause"></div>
-        <div class="go-stats">
-            <div class="go-stat"><span>到达波次</span><span id="goWave">1</span></div>
-            <div class="go-stat"><span>击杀</span><span id="goKills">0</span></div>
-            <div class="go-stat"><span>获得金币</span><span id="goGold">0</span></div>
-        </div>
-        <div class="go-btns">
-            <button id="btnRetry" class="btn-primary">再来一局</button>
-            <button id="btnQuit" class="btn-secondary">返回主菜单</button>
-        </div>
-    </div>
-</div>
-
-<!-- 胜利 -->
-<div id="victoryScreen" class="overlay hidden">
-    <div class="overlay-card">
-        <div class="overlay-title" style="color:#ffcc00;">胜利!</div>
-        <div class="go-stats">
-            <div class="go-stat"><span>获得金币</span><span id="vicGold">0</span></div>
-        </div>
-        <div class="go-btns">
-            <button id="btnVictory" class="btn-primary">返回主菜单</button>
-        </div>
-    </div>
-</div>
-
-<!-- 暂停 -->
-<div id="pauseScreen" class="overlay hidden">
-    <div class="overlay-card">
-        <div class="overlay-title">暂停</div>
-        <div class="go-btns">
-            <button id="btnResume" class="btn-primary">继续战斗</button>
-            <button id="btnQuit" class="btn-secondary">返回主菜单</button>
-        </div>
-    </div>
-</div>
-
-<!-- 英雄强化 -->
-<div id="upgradeScreen" class="overlay hidden">
-    <div class="overlay-card wide-card">
-        <div class="overlay-title">英雄强化</div>
-        <div class="upgrade-gold">金币: <span id="upgradeGold">0</span></div>
-        <div id="upgradeList" class="upgrade-list"></div>
-        <button id="btnCloseUpgrade" class="btn-close">关闭</button>
-    </div>
-</div>
-
-<!-- GM后台 -->
-<div id="gmScreen" class="overlay hidden">
-    <div class="overlay-card wide-card">
-        <div class="overlay-title">GM后台</div>
-        <div class="gm-section">
-            <div class="gm-row">
-                <label>金币:</label>
-                <input id="gmGoldInput" type="number" value="0">
-                <button id="btnGMSet">设置</button>
-                <button id="btnGMAdd">+99999</button>
-            </div>
-            <div class="gm-row">
-                <button id="btnGMReset" class="btn-danger">重置所有数据</button>
-                <button id="btnGMMax">满级强化</button>
-            </div>
-        </div>
-        <button id="btnCloseGM" class="btn-close">关闭</button>
-    </div>
 </div>
 
 <script src="js/game.js"></script>

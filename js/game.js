@@ -1,1310 +1,1229 @@
 /**
- * 王国守卫 - 塔防引擎 v6.0
- * 竖版固定塔防 | 20波 | 20级英雄 | 关卡选择 | 技能系统 | 村落守护
+ * 火柴人战斗 - RPG动作游戏 v1.0
+ * 竖版 | 虚拟摇杆 | 攻击/跳跃/技能 | 场景推进 | BOSS护甲机制
  */
 (function(){
 'use strict';
 
 // ==================== 绿幕抠图 ====================
 const ChromaKey = {
-    cache: {},
-    process(img, key) {
-        if (this.cache[key]) return this.cache[key];
-        const c = document.createElement('canvas');
-        c.width = img.width; c.height = img.height;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const data = ctx.getImageData(0, 0, c.width, c.height);
-        const pixels = data.data;
-        for (let i = 0; i < pixels.length; i += 4) {
-            const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-            if (g > 80 && g > r * 1.3 && g > b * 1.1) {
-                const greenness = Math.min(1, (g - Math.max(r, b)) / 100);
-                pixels[i + 3] = Math.round(255 * (1 - greenness));
+    cache:{},
+    process(img,key){
+        if(this.cache[key]) return this.cache[key];
+        const c=document.createElement('canvas');
+        c.width=img.width; c.height=img.height;
+        const ctx=c.getContext('2d');
+        ctx.drawImage(img,0,0);
+        const data=ctx.getImageData(0,0,c.width,c.height);
+        const p=data.data;
+        for(let i=0;i<p.length;i+=4){
+            const r=p[i],g=p[i+1],b=p[i+2];
+            if(g>100&&g>r*1.4&&g>b*1.2){
+                const gn=Math.min(1,(g-Math.max(r,b))/80);
+                p[i+3]=Math.round(255*(1-gn));
             }
         }
-        ctx.putImageData(data, 0, 0);
-        this.cache[key] = c;
+        ctx.putImageData(data,0,0);
+        this.cache[key]=c;
         return c;
     },
-    clear() { this.cache = {}; }
+    clear(){this.cache={};}
 };
 
 // ==================== 资源路径 ====================
-const IMG = {
-    bg_grassland: 'assets/images/td_bg_grassland.jpg',
-    bg_desert:   'assets/images/td_bg_desert.jpg',
-    bg_forest:   'assets/images/td_bg_forest.jpg',
-    bg_castle:   'assets/images/td_bg_castle.jpg',
-    bg_volcano:  'assets/images/td_bg_volcano.jpg',
-    hero:        'assets/images/td_hero.jpg',
-    enemySlime:    'assets/images/td_enemy_slime.jpg',
-    enemySkeleton: 'assets/images/td_enemy_skeleton.jpg',
-    enemyDemon:    'assets/images/td_enemy_demon.jpg',
-    enemyBoss:     'assets/images/td_enemy_boss.jpg',
-    bullet:     'assets/images/td_bullet.jpg',
-    skillFire:  'assets/images/td_skill_fire.jpg',
-    skillIce:   'assets/images/td_skill_ice.jpg',
-    village:    'assets/images/td_village_gate.jpg',
+const IMG={
+    player:'assets/images/stickman_player.jpg',
+    enemySword:'assets/images/stickman_enemy_sword.jpg',
+    enemySpear:'assets/images/stickman_enemy_spear.jpg',
+    enemyAxe:'assets/images/stickman_enemy_axe.jpg',
+    boss:'assets/images/stickman_boss.jpg',
+    weaponSword:'assets/images/weapon_sword.jpg',
+    weaponStaff:'assets/images/weapon_staff.jpg',
+    weaponKnife:'assets/images/weapon_knife.jpg',
+    weaponSpear:'assets/images/weapon_spear.jpg',
 };
 
 // ==================== 配置 ====================
-const CFG = {
-    MAX_LEVEL: 20,
-    MAX_WAVES: 20,
-    STAGES: [
-        { id:1, name:'草原', bgKey:'bg_grassland', unlocked:true,  enemyHpMul:1.0, enemySpdMul:1.0, goldMul:1.0, villageHp:200 },
-        { id:2, name:'沙漠', bgKey:'bg_desert',   unlocked:true,  enemyHpMul:1.3, enemySpdMul:1.15, goldMul:1.2, villageHp:250 },
-        { id:3, name:'森林', bgKey:'bg_forest',   unlocked:true,  enemyHpMul:1.6, enemySpdMul:1.0, goldMul:1.4, villageHp:300 },
-        { id:4, name:'城堡', bgKey:'bg_castle',   unlocked:true,  enemyHpMul:2.0, enemySpdMul:1.25, goldMul:1.6, villageHp:350 },
-        { id:5, name:'火山', bgKey:'bg_volcano',  unlocked:true,  enemyHpMul:2.5, enemySpdMul:1.35, goldMul:1.8, villageHp:400 },
+const CFG={
+    PLAYER:{hp:100,atk:15,spd:3.5,jumpForce:12,atkCooldown:0.35,skillCooldown:5,skillDmgMul:2.5},
+    WEAPONS:{
+        sword:{name:'剑',atkMul:1.0,range:55,speed:1.0},
+        staff:{name:'棍',atkMul:0.8,range:65,speed:1.2},
+        knife:{name:'刀',atkMul:1.3,range:40,speed:0.85},
+        spear:{name:'枪',atkMul:1.1,range:70,speed:0.9},
+    },
+    ENEMIES:{
+        sword:{name:'剑士',hp:40,atk:8,spd:1.5,atkRange:50,sight:300,atkCd:1.5,dodge:0.3,xp:20},
+        spear:{name:'枪兵',hp:35,atk:10,spd:1.8,atkRange:65,sight:320,atkCd:1.8,dodge:0.25,xp:25},
+        axe:{name:'斧兵',hp:55,atk:14,spd:1.2,atkRange:40,sight:280,atkCd:2.0,dodge:0.15,xp:35},
+    },
+    BOSS_CFG:{hp:300,armor:150,atk:20,spd:1.0,atkRange:60,sight:400,atkCd:2.5,stunDuration:6,xp:200},
+    SCENES:[
+        {id:1,name:'草原',sky:'#87CEEB',ground:'#7ec850',enemies:[{type:'sword',count:3}],boss:false,width:1800},
+        {id:2,name:'森林',sky:'#5a8a3c',ground:'#4a6a2c',enemies:[{type:'spear',count:3}],boss:false,width:2000},
+        {id:3,name:'洞穴',sky:'#3a2a1a',ground:'#5a4a3a',enemies:[{type:'axe',count:4}],boss:false,width:2200},
+        {id:4,name:'BOSS·暗影将军',sky:'#2a1a2a',ground:'#4a2a3a',enemies:[],boss:true,width:1600,bossName:'暗影将军'},
+        {id:5,name:'山道',sky:'#8a8a7a',ground:'#6a6a5a',enemies:[{type:'sword',count:2},{type:'spear',count:2}],boss:false,width:2400},
+        {id:6,name:'火山',sky:'#cc4400',ground:'#884422',enemies:[{type:'axe',count:4}],boss:false,width:2000},
+        {id:7,name:'城堡',sky:'#4a4a6a',ground:'#3a3a5a',enemies:[{type:'spear',count:2},{type:'axe',count:2}],boss:false,width:2400},
+        {id:8,name:'BOSS·暗影之王',sky:'#1a0000',ground:'#2a0a0a',enemies:[],boss:true,width:1600,bossName:'暗影之王',finalBoss:true},
     ],
-    ENEMY_TYPES: {
-        slime:    { name:'史莱姆', hp:25,  dmg:5,  villageDmg:3,  spd:1.0, size:36, xp:10,  gold:2,  color:'#44cc44' },
-        skeleton: { name:'骷髅兵', hp:60,  dmg:10, villageDmg:6,  spd:0.8, size:42, xp:22,  gold:5,  color:'#cccccc' },
-        demon:    { name:'恶魔',   hp:130, dmg:20, villageDmg:12, spd:1.3, size:48, xp:50,  gold:12, color:'#cc4444' },
-        boss:     { name:'巨龙',   hp:500, dmg:35, villageDmg:25, spd:0.5, size:72, xp:250, gold:50, color:'#8844cc' },
-    },
-    SKILLS: {
-        fire: { name:'火球术', desc:'全屏随机火球坠落', cooldown:18, icon:IMG.skillFire, fireballs:14, damage:40 },
-        ice:  { name:'冰霜剑', desc:'扩散冰剑扇形攻击', cooldown:15, icon:IMG.skillIce, swords:7, damage:30 },
-    },
-    HERO: {
-        baseHp: 120, baseAtk: 20, baseAtkSpd: 2.5, baseSpd: 4.0,
-        bulletSpeed: 8, bulletSize: 12, bulletPierce: 1,
-    },
-    XP_BASE: 20, XP_GROW: 1.28,
-    PERM_UPGRADES: {
-        hp:     { name:'生命强化', desc:'+15 最大生命', baseCost:60,  costMul:1.4, maxLv:15 },
-        atk:    { name:'攻击强化', desc:'+3 基础攻击',  baseCost:80,  costMul:1.4, maxLv:15 },
-        atkSpd: { name:'攻速强化', desc:'+10% 攻击速度',baseCost:70,  costMul:1.4, maxLv:12 },
-        spd:    { name:'速度强化', desc:'+0.3 移动速度',baseCost:70,  costMul:1.4, maxLv:10 },
-        skill:  { name:'技能强化', desc:'+8% 技能伤害', baseCost:100, costMul:1.5, maxLv:10 },
-        gold:   { name:'金币加成', desc:'+10% 金币获取',baseCost:90,  costMul:1.3, maxLv:10 },
-    },
-    LEVEL_OPTIONS: [
-        { id:'hp',      name:'生命强化',  desc:'+20 最大生命',   weight:12 },
-        { id:'atk',     name:'攻击强化',  desc:'+4 基础攻击',     weight:12 },
-        { id:'atkSpd',  name:'攻速提升',  desc:'+15% 攻击速度',   weight:10 },
-        { id:'spd',     name:'速度提升',  desc:'+0.5 移动速度',   weight:8 },
-        { id:'bullet',  name:'弹幕强化',  desc:'+1 子弹穿透',     weight:10 },
-        { id:'multi',   name:'多重射击',  desc:'+1 额外子弹',     weight:8 },
-        { id:'heal',    name:'即时治疗',  desc:'恢复50%生命',     weight:8 },
-        { id:'skillDmg',name:'技能威力',  desc:'+20% 技能伤害',   weight:8 },
-        { id:'skillCd', name:'技能冷却',  desc:'-2秒 技能冷却',  weight:8 },
-    ],
-};
-
-// ==================== 图片加载 ====================
-const Assets = {
-    loaded: {}, total: 0, count: 0,
-    loadAll() {
-        const urls = [
-            {key:'bg_grassland', url:IMG.bg_grassland},
-            {key:'bg_desert', url:IMG.bg_desert},
-            {key:'bg_forest', url:IMG.bg_forest},
-            {key:'bg_castle', url:IMG.bg_castle},
-            {key:'bg_volcano', url:IMG.bg_volcano},
-            {key:'hero', url:IMG.hero},
-            {key:'enemySlime', url:IMG.enemySlime},
-            {key:'enemySkeleton', url:IMG.enemySkeleton},
-            {key:'enemyDemon', url:IMG.enemyDemon},
-            {key:'enemyBoss', url:IMG.enemyBoss},
-            {key:'bullet', url:IMG.bullet},
-            {key:'skillFire', url:IMG.skillFire},
-            {key:'skillIce', url:IMG.skillIce},
-            {key:'village', url:IMG.village},
-        ];
-        this.total = urls.length;
-        return Promise.all(urls.map(item=>this.loadImage(item.key, item.url)));
-    },
-    loadImage(key, url) {
-        return new Promise((resolve)=>{
-            const img = new Image();
-            img.onload = ()=>{
-                this.loaded[key]=img;
-                if (key !== 'bg_grassland' && key !== 'bg_desert' && key !== 'bg_forest' && key !== 'bg_castle' && key !== 'bg_volcano') {
-                    ChromaKey.process(img, key);
-                }
-                this.count++;
-                const pct = Math.floor(this.progress()*100);
-                const bar = document.getElementById('loadBar');
-                const txt = document.getElementById('loadText');
-                if(bar) bar.style.width = pct+'%';
-                if(txt) txt.textContent = '加载中... '+pct+'%';
-                resolve();
-            };
-            img.onerror = ()=>{ this.count++; resolve(); };
-            img.src = url;
-        });
-    },
-    getRaw(key) { return this.loaded[key]||null; },
-    getSprite(key) {
-        const img = this.loaded[key];
-        if (!img) return null;
-        return ChromaKey.process(img, key);
-    },
-    progress() { return this.total>0?this.count/this.total:0; },
+    SAVE_KEY:'stickman_rpg_v1',
 };
 
 // ==================== 存档 ====================
-const DB = {
-    key: 'kingdom_defense_v6',
-    data: null,
-    defaults: {
-        gold: 0, highWave: 0, totalKills: 0,
-        permUpgrades: { hp:0, atk:0, atkSpd:0, spd:0, skill:0, gold:0 },
-        unlockedStages: [1],
-    },
-    init() {
-        try {
-            const raw = localStorage.getItem(this.key);
-            this.data = raw ? Object.assign({}, this.defaults, JSON.parse(raw)) : Object.assign({}, this.defaults);
-            if (!this.data.permUpgrades) this.data.permUpgrades = Object.assign({}, this.defaults.permUpgrades);
-            if (!this.data.unlockedStages || this.data.unlockedStages.length===0) this.data.unlockedStages = [1];
+const DB={
+    data:{scene:1,weapon:'sword',maxScene:1},
+    init(){
+        try{
+            const raw=localStorage.getItem(CFG.SAVE_KEY);
+            if(raw) this.data=Object.assign(this.data,JSON.parse(raw));
             this.save();
-        } catch(e) { this.data = Object.assign({}, this.defaults); }
+        }catch(e){}
     },
-    save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch(e) {} },
-    getGold() { return this.data.gold; },
-    addGold(n) { this.data.gold += n; this.save(); },
-    spendGold(n) { if(this.data.gold >= n) { this.data.gold -= n; this.save(); return true; } return false; },
-    getPermLv(key) { return this.data.permUpgrades[key] || 0; },
-    upgradePerm(key) {
-        const cfg = CFG.PERM_UPGRADES[key];
-        const lv = this.getPermLv(key);
-        if(lv >= cfg.maxLv) return false;
-        const cost = Math.floor(cfg.baseCost * Math.pow(cfg.costMul, lv));
-        if(this.spendGold(cost)) { this.data.permUpgrades[key] = lv + 1; this.save(); return true; }
-        return false;
+    save(){try{localStorage.setItem(CFG.SAVE_KEY,JSON.stringify(this.data));}catch(e){}}
+};
+
+// ==================== 图片加载 ====================
+const Assets={
+    loaded:{},total:0,count:0,
+    loadAll(){
+        const urls=[];
+        for(const k in IMG) urls.push({key:k,url:IMG[k]});
+        this.total=urls.length;
+        return Promise.all(urls.map(item=>this.loadImage(item.key,item.url)));
     },
-    getPermCost(key) {
-        const cfg = CFG.PERM_UPGRADES[key];
-        const lv = this.getPermLv(key);
-        return Math.floor(cfg.baseCost * Math.pow(cfg.costMul, lv));
+    loadImage(key,url){
+        return new Promise((resolve)=>{
+            const img=new Image();
+            img.onload=()=>{
+                this.loaded[key]=img;
+                ChromaKey.process(img,key);
+                this.count++;
+                const pct=Math.floor(this.progress()*100);
+                const bar=document.getElementById('loadBar');
+                const txt=document.getElementById('loadText');
+                if(bar) bar.style.width=pct+'%';
+                if(txt) txt.textContent='加载中... '+pct+'%';
+                resolve();
+            };
+            img.onerror=()=>{this.count++;resolve();};
+            img.src=url;
+        });
     },
-    unlockStage(id) {
-        if (!this.data.unlockedStages.includes(id)) {
-            this.data.unlockedStages.push(id);
-            this.save();
-        }
+    getSprite(key){
+        const img=this.loaded[key];
+        if(!img) return null;
+        return ChromaKey.process(img,key);
     },
-    resetAll() { this.data = Object.assign({}, this.defaults); this.save(); },
-    maxAll() {
-        for(let k in CFG.PERM_UPGRADES) this.data.permUpgrades[k] = CFG.PERM_UPGRADES[k].maxLv;
-        this.data.unlockedStages = [1,2,3,4,5];
-        this.save();
-    },
+    progress(){return this.total>0?this.count/this.total:0;}
 };
 
 // ==================== 工具 ====================
-function rand(min,max) { return Math.random()*(max-min)+min; }
-function randInt(min,max) { return Math.floor(rand(min,max+1)); }
-function clamp(v,min,max) { return Math.max(min,Math.min(max,v)); }
-function dist(a,b) { const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
-function lerp(a,b,t) { return a+(b-a)*t; }
-function easeOutCubic(t) { return 1-Math.pow(1-t,3); }
-function easeInOutQuad(t) { return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+function rand(min,max){return Math.random()*(max-min)+min;}
+function randInt(min,max){return Math.floor(rand(min,max+1));}
+function clamp(v,min,max){return Math.max(min,Math.min(v,max));}
+function dist(a,b){const dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
 
 // ==================== 粒子 ====================
-class Particle {
-    constructor(x,y,opts={}) {
-        this.x=x; this.y=y; this.vx=opts.vx||rand(-1,1); this.vy=opts.vy||rand(-1,1);
-        this.life=opts.life||0.5; this.maxLife=this.life; this.color=opts.color||'#fff';
-        this.size=opts.size||3; this.dead=false; this.gravity=opts.gravity||0;
+class Particle{
+    constructor(x,y,opts={}){
+        this.x=x;this.y=y;this.vx=opts.vx||rand(-1,1);this.vy=opts.vy||rand(-1,1);
+        this.life=opts.life||0.5;this.maxLife=this.life;this.color=opts.color||'#fff';
+        this.size=opts.size||3;this.dead=false;this.gravity=opts.gravity||0;
+        this.shrink=opts.shrink!==false;
     }
-    update(dt) {
-        this.x+=this.vx*60*dt; this.y+=this.vy*60*dt;
+    update(dt){
+        this.x+=this.vx*60*dt;this.y+=this.vy*60*dt;
         this.vy+=this.gravity*60*dt;
-        this.life-=dt; if(this.life<=0) this.dead=true;
+        this.life-=dt;if(this.life<=0) this.dead=true;
     }
-    draw(ctx) {
+    draw(ctx,camX){
         const a=this.life/this.maxLife;
-        ctx.globalAlpha=a; ctx.fillStyle=this.color;
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.size*a, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha=a;ctx.fillStyle=this.color;
+        const s=this.shrink?this.size*a:this.size;
+        ctx.beginPath();ctx.arc(this.x-camX,this.y,s,0,Math.PI*2);ctx.fill();
         ctx.globalAlpha=1;
     }
 }
 
-// ==================== 子弹 ====================
-class Bullet {
-    constructor(x,y,damage,pierce) {
-        this.x=x; this.y=y; this.damage=damage; this.pierce=pierce;
-        this.speed=CFG.HERO.bulletSpeed; this.size=CFG.HERO.bulletSize;
-        this.vx=0; this.dead=false; this.hit=new Set();
-        this.sprite=Assets.getSprite('bullet');
-        this.age=0;
+// ==================== 玩家 ====================
+class Player{
+    constructor(x,y){
+        this.x=x;this.y=y;this.vx=0;this.vy=0;
+        this.width=30;this.height=60;
+        this.maxHp=CFG.PLAYER.hp;this.hp=this.maxHp;
+        this.atk=CFG.PLAYER.atk;
+        this.spd=CFG.PLAYER.spd;
+        this.facingRight=true;
+        this.grounded=false;
+        this.atkTimer=0;this.skillTimer=0;
+        this.invulnTimer=0;
+        this.attacking=false;this.attackFrame=0;
+        this.skilling=false;this.skillFrame=0;
+        this.weapon='sword';
+        this.sprite=Assets.getSprite('player');
+        this.animTimer=0;
+        this.hitFlash=0;
     }
-    update(dt) {
-        this.age+=dt;
+    getWeaponCfg(){return CFG.WEAPONS[this.weapon]||CFG.WEAPONS.sword;}
+    getAtk(){return Math.floor(this.atk*this.getWeaponCfg().atkMul);}
+    getAtkRange(){return this.getWeaponCfg().range;}
+    update(dt,joystick,gameW,gameH,worldW,groundY){
+        this.animTimer+=dt;
+        this.atkTimer=Math.max(0,this.atkTimer-dt);
+        this.skillTimer=Math.max(0,this.skillTimer-dt);
+        this.invulnTimer=Math.max(0,this.invulnTimer-dt);
+        this.hitFlash=Math.max(0,this.hitFlash-dt);
+        // 移动
+        const wcfg=this.getWeaponCfg();
+        this.vx=joystick.dx*this.spd*wcfg.speed;
+        if(Math.abs(this.vx)>0.1) this.facingRight=this.vx>0;
+        // 跳跃
+        if(joystick.jumpPressed&&this.grounded){
+            this.vy=-CFG.PLAYER.jumpForce;
+            this.grounded=false;
+            joystick.jumpPressed=false;
+        }
+        // 重力
+        this.vy+=25*dt;
+        // 位置更新
         this.x+=this.vx*60*dt;
-        this.y-=this.speed*60*dt;
-        if(this.y<-20) this.dead=true;
+        this.y+=this.vy*60*dt;
+        // 地面碰撞
+        if(this.y+this.height/2>=groundY){
+            this.y=groundY-this.height/2;
+            this.vy=0;
+            this.grounded=true;
+        }else{
+            this.grounded=false;
+        }
+        // 边界
+        this.x=clamp(this.x,this.width/2,worldW-this.width/2);
+        if(this.y<-100) this.y=-100;
+        // 攻击动画
+        if(this.attacking){
+            this.attackFrame+=dt*12;
+            if(this.attackFrame>=1){this.attacking=false;this.attackFrame=0;}
+        }
+        if(this.skilling){
+            this.skillFrame+=dt*8;
+            if(this.skillFrame>=1){this.skilling=false;this.skillFrame=0;}
+        }
     }
-    draw(ctx) {
-        if (this.sprite) {
-            const sz=this.size*0.9;
-            ctx.save();
-            ctx.translate(this.x, this.y);
-            ctx.rotate(this.age*8);
-            ctx.drawImage(this.sprite, -sz, -sz, sz*2, sz*2);
-            ctx.restore();
-        } else {
-            ctx.fillStyle='#ffcc00'; ctx.shadowColor='#ffcc00'; ctx.shadowBlur=8;
-            ctx.beginPath(); ctx.arc(this.x,this.y,this.size*0.5,0,Math.PI*2); ctx.fill();
-            ctx.shadowBlur=0;
+    attack(){
+        if(this.atkTimer>0||this.attacking) return null;
+        this.atkTimer=this.getWeaponCfg().speed*CFG.PLAYER.atkCooldown;
+        this.attacking=true;this.attackFrame=0;
+        const dir=this.facingRight?1:-1;
+        return {
+            x:this.x+dir*25,
+            y:this.y-5,
+            w:this.getAtkRange(),
+            h:40,
+            damage:this.getAtk(),
+            knockback:dir*4,
+            color:'#ffdd44'
+        };
+    }
+    skill(){
+        if(this.skillTimer>0||this.skilling) return null;
+        this.skillTimer=CFG.PLAYER.skillCooldown;
+        this.skilling=true;this.skillFrame=0;
+        const dir=this.facingRight?1:-1;
+        return {
+            x:this.x+dir*30,
+            y:this.y-15,
+            w:this.getAtkRange()*1.5,
+            h:60,
+            damage:Math.floor(this.getAtk()*CFG.PLAYER.skillDmgMul),
+            knockback:dir*8,
+            color:'#ff6644',
+            isSkill:true
+        };
+    }
+    takeDamage(dmg){
+        if(this.invulnTimer>0) return;
+        this.hp-=dmg;
+        this.invulnTimer=0.3;
+        this.hitFlash=0.15;
+        this.vy=-3;
+        if(this.hp<=0) this.hp=0;
+    }
+    heal(amount){
+        this.hp=Math.min(this.maxHp,this.hp+amount);
+    }
+    draw(ctx,camX,groundY){
+        if(this.invulnTimer>0&&Math.floor(this.invulnTimer*20)%2===0) return;
+        const sx=this.x-camX;
+        const sy=this.y;
+        ctx.save();
+        ctx.translate(sx,sy);
+        if(!this.facingRight) ctx.scale(-1,1);
+        if(this.hitFlash>0){ctx.globalAlpha=0.5+Math.sin(this.hitFlash*30)*0.3;}
+        // 绘制火柴人
+        this.drawStickman(ctx,0,0);
+        ctx.restore();
+    }
+    drawStickman(ctx,ox,oy){
+        const h=this.height;
+        const bodyLen=h*0.25;
+        // 身体
+        ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.3);ctx.lineTo(ox,oy+bodyLen*0.7);ctx.stroke();
+        // 头
+        ctx.fillStyle='#222';ctx.beginPath();ctx.arc(ox,oy-bodyLen*0.3-8,9,0,Math.PI*2);ctx.fill();
+        // 表情
+        ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ox-3,oy-bodyLen*0.3-10,2,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ox+3,oy-bodyLen*0.3-10,2,0,Math.PI*2);ctx.fill();
+        // 腿
+        ctx.beginPath();ctx.moveTo(ox,oy+bodyLen*0.7);
+        ctx.lineTo(ox-12,oy+h*0.45);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ox,oy+bodyLen*0.7);
+        ctx.lineTo(ox+12,oy+h*0.45);ctx.stroke();
+        // 手臂
+        const armAngle=this.attacking?0.5:this.skilling?0.8:0;
+        const armLen=bodyLen*0.8;
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+        ctx.lineTo(ox+Math.cos(Math.PI*0.3+armAngle)*armLen,oy-bodyLen*0.1-Math.sin(Math.PI*0.3+armAngle)*armLen);
+        ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+        ctx.lineTo(ox-Math.cos(Math.PI*0.3)*armLen,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen);
+        ctx.stroke();
+        // 武器
+        if(this.attacking||this.skilling){
+            ctx.strokeStyle=this.skilling?'#ff6644':'#ffdd44';ctx.lineWidth=4;
+            const wx=ox+Math.cos(Math.PI*0.3+armAngle)*armLen*1.5;
+            const wy=oy-bodyLen*0.1-Math.sin(Math.PI*0.3+armAngle)*armLen*1.5;
+            ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+            ctx.lineTo(wx,wy);ctx.stroke();
+            // 攻击特效
+            ctx.strokeStyle=this.skilling?'rgba(255,100,50,0.6)':'rgba(255,220,80,0.5)';
+            ctx.lineWidth=6;
+            ctx.beginPath();ctx.arc(wx,wy,15,0,Math.PI*2);ctx.stroke();
         }
     }
 }
 
 // ==================== 敌人 ====================
-class Enemy {
-    constructor(type, x, y, stageCfg) {
-        const cfg = CFG.ENEMY_TYPES[type];
-        this.type=type; this.x=x; this.y=y; this.name=cfg.name;
-        this.maxHp=Math.floor(cfg.hp * stageCfg.enemyHpMul);
-        this.hp=this.maxHp;
-        this.damage=cfg.dmg; this.villageDmg=cfg.villageDmg;
-        this.spd=cfg.spd * stageCfg.enemySpdMul;
-        this.size=cfg.size; this.color=cfg.color;
-        this.xp=cfg.xp; this.gold=Math.floor(cfg.gold * stageCfg.goldMul);
-        this.dead=false; this.hitFlash=0;
-        this.wobble=rand(0,Math.PI*2);
-        this.freezeTimer=0;
-        let spriteKey='enemySlime';
-        if(type==='skeleton') spriteKey='enemySkeleton';
-        else if(type==='demon') spriteKey='enemyDemon';
-        else if(type==='boss') spriteKey='enemyBoss';
-        this.sprite=Assets.getSprite(spriteKey);
-        this.bobOffset=rand(0,Math.PI*2);
+class Enemy{
+    constructor(type,x,y,groundY,idx){
+        const cfg=CFG.ENEMIES[type];
+        this.cfg=cfg;this.type=type;this.name=cfg.name;
+        this.x=x;this.y=y;this.groundY=groundY;
+        this.maxHp=cfg.hp;this.hp=this.maxHp;
+        this.atk=cfg.atk;this.spd=cfg.spd;
+        this.atkRange=cfg.atkRange;this.sight=cfg.sight;
+        this.atkCd=cfg.atkCd;this.dodge=cfg.dodge;
+        this.width=30;this.height=58;
+        this.facingRight=false;
+        this.vx=0;this.vy=0;
+        this.state='idle'; // idle patrol chase attack dodge hitstun dead
+        this.stateTimer=rand(0.5,2);
+        this.atkTimer=0;
+        this.hitFlash=0;this.hitStunTimer=0;
+        this.dead=false;this.deathTimer=0;
+        this.attacking=false;this.attackFrame=0;
+        this.patrolDir=rand(0,1)<0.5?-1:1;
+        this.patrolBase=this.x;
+        this.animTimer=rand(0,10);
+        this.idx=idx||0;
+        this.sprite=Assets.getSprite('enemy'+type.charAt(0).toUpperCase()+type.slice(1));
     }
-    update(dt) {
-        const spdMul = this.freezeTimer>0 ? 0.3 : 1.0;
-        this.freezeTimer=Math.max(0,this.freezeTimer-dt);
-        this.y+=this.spd*60*dt*spdMul;
-        this.x+=Math.sin(this.y/50+this.wobble)*0.5;
+    update(dt,player,playerAttacking){
+        if(this.dead){this.deathTimer+=dt;return;}
+        this.animTimer+=dt;
+        this.atkTimer=Math.max(0,this.atkTimer-dt);
         this.hitFlash=Math.max(0,this.hitFlash-dt);
-        if(this.y>window._game.gameH+80) this.dead=true;
+        this.hitStunTimer=Math.max(0,this.hitStunTimer-dt);
+        if(this.hitStunTimer>0){this.state='hitstun';this.vx*=0.9;this.x+=this.vx*60*dt;return;}
+        const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
+        this.facingRight=player.x>this.x;
+        // AI状态机
+        switch(this.state){
+            case 'idle':
+                this.stateTimer-=dt;
+                if(this.stateTimer<=0){this.state='patrol';this.stateTimer=rand(1,3);this.patrolDir=rand(0,1)<0.5?-1:1;}
+                if(d<this.sight) this.state='chase';
+                break;
+            case 'patrol':
+                this.vx=this.spd*this.patrolDir*0.5;
+                this.stateTimer-=dt;
+                if(this.stateTimer<=0){this.state='idle';this.stateTimer=rand(1,3);}
+                if(d<this.sight) this.state='chase';
+                if(Math.abs(this.x-this.patrolBase)>80) this.patrolDir*=-1;
+                break;
+            case 'chase':
+                this.vx=(this.facingRight?1:-1)*this.spd;
+                if(d<this.atkRange&&this.atkTimer<=0){
+                    this.state='attack';this.attacking=true;this.attackFrame=0;this.atkTimer=this.atkCd;
+                }
+                if(d>this.sight*1.2){this.state='idle';this.stateTimer=rand(1,2);}
+                if(playerAttacking&&d<80&&Math.random()<this.dodge){
+                    this.state='dodge';this.stateTimer=0.4;
+                    this.vx=(this.facingRight?-1:1)*this.spd*2;
+                }
+                break;
+            case 'attack':
+                this.vx*=0.8;
+                if(this.attacking){this.attackFrame+=dt*8;if(this.attackFrame>=1){this.attacking=false;this.attackFrame=0;}}
+                if(!this.attacking&&this.attackFrame===0){this.state='chase';}
+                break;
+            case 'dodge':
+                this.stateTimer-=dt;this.vx*=0.95;
+                if(this.stateTimer<=0){this.state='chase';}
+                break;
+        }
+        this.x+=this.vx*60*dt;
+        this.y=this.groundY-this.height/2;
+        // 攻击动画
+        if(this.attacking&&this.attackFrame>0.6&&this.attackFrame<0.65){
+            // 攻击判定在动画中间帧
+            this.doAttack(player);
+        }
     }
-    takeDamage(dmg, game, freeze) {
-        this.hp-=dmg; this.hitFlash=0.08;
-        if(freeze) this.freezeTimer=0.5;
-        if(this.hp<=0) { this.die(game); return true; }
+    doAttack(player){
+        const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
+        if(d<this.atkRange+20){
+            player.takeDamage(this.atk);
+        }
+    }
+    takeDamage(dmg,knockback){
+        this.hp-=dmg;this.hitFlash=0.1;this.hitStunTimer=0.15;
+        this.vx=knockback||0;
+        if(this.hp<=0){this.die();return true;}
         return false;
     }
-    die(game) {
-        this.dead=true; game.kills++; game.goldEarned+=this.gold;
-        game.score+=this.xp;
-        for(let i=0;i<10;i++) {
-            game.particles.push(new Particle(this.x,this.y,{
-                vx:rand(-2.5,2.5), vy:rand(-2.5,1), color:this.color, life:0.5, size:rand(2,5)
-            }));
-        }
-        game.addXP(this.xp);
+    die(){
+        this.dead=true;this.state='dead';
+        this.deathTimer=0;
     }
-    draw(ctx) {
-        const drawSize=this.size*3.0;
-        if (this.sprite) {
-            ctx.save();
-            if(this.hitFlash>0) ctx.globalAlpha=0.5;
-            const asp=this.sprite.width/this.sprite.height;
-            let dw=drawSize, dh=drawSize;
-            if(asp>1) dh=drawSize/asp; else dw=drawSize*asp;
-            const bob=Math.sin(Date.now()*0.003+this.bobOffset)*3;
-            ctx.drawImage(this.sprite, this.x-dw/2, this.y-dh/2+bob, dw, dh);
-            if(this.freezeTimer>0) {
-                ctx.globalAlpha=0.35;
-                ctx.fillStyle='#88ccff';
-                ctx.fillRect(this.x-dw/2, this.y-dh/2+bob, dw, dh);
-            }
-            ctx.restore();
-        } else {
-            ctx.fillStyle=this.hitFlash>0?'#fff':this.color;
-            ctx.beginPath(); ctx.arc(this.x,this.y,this.size*0.8,0,Math.PI*2); ctx.fill();
-            ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=2; ctx.stroke();
-        }
+    draw(ctx,camX){
+        if(this.dead&&this.deathTimer>0.5) return;
+        const sx=this.x-camX;const sy=this.y;
+        ctx.save();
+        ctx.translate(sx,sy);
+        if(this.dead){ctx.globalAlpha=1-this.deathTimer*2;ctx.rotate(this.deathTimer*3);}
+        if(!this.facingRight) ctx.scale(-1,1);
+        if(this.hitFlash>0){ctx.globalAlpha=0.5;}
+        this.drawStickman(ctx,0,0);
+        ctx.restore();
         // 血条
+        if(!this.dead) this.drawHealthBar(ctx,camX);
+    }
+    drawStickman(ctx,ox,oy){
+        const h=this.height;
+        const bodyLen=h*0.25;
+        ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.3);ctx.lineTo(ox,oy+bodyLen*0.7);ctx.stroke();
+        // 头
+        ctx.fillStyle='#c22';ctx.beginPath();ctx.arc(ox,oy-bodyLen*0.3-8,9,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ox-3,oy-bodyLen*0.3-9,2,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ox+3,oy-bodyLen*0.3-9,2,0,Math.PI*2);ctx.fill();
+        // 腿
+        ctx.beginPath();ctx.moveTo(ox,oy+bodyLen*0.7);
+        ctx.lineTo(ox-12,oy+h*0.45);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ox,oy+bodyLen*0.7);
+        ctx.lineTo(ox+12,oy+h*0.45);ctx.stroke();
+        // 手臂
+        const armLen=bodyLen*0.8;
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+        ctx.lineTo(ox+Math.cos(Math.PI*0.3)*armLen,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen);
+        ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+        ctx.lineTo(ox-Math.cos(Math.PI*0.3)*armLen,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen);
+        ctx.stroke();
+        // 武器标记
+        ctx.strokeStyle='#666';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(ox+Math.cos(Math.PI*0.3)*armLen,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen);
+        ctx.lineTo(ox+Math.cos(Math.PI*0.3)*armLen*1.8,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen*1.8);
+        ctx.stroke();
+    }
+    drawHealthBar(ctx,camX){
+        const sx=this.x-camX;const sy=this.y-this.height/2-15;
+        const bw=36,bh=5;
+        ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy,bw,bh);
         const hpR=this.hp/this.maxHp;
-        const bw=this.size*1.8, bh=5, by=this.y-this.size*0.8-12;
-        ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(this.x-bw/2,by,bw,bh);
-        ctx.fillStyle=this.freezeTimer>0?'#88ccff':(hpR>0.3?'#4a4':'#c44');
-        ctx.fillRect(this.x-bw/2,by,bw*hpR,bh);
-    }
-    hasReachedBottom(gameH) { return this.y > gameH - 30; }
-}
-
-// ==================== 技能特效 ====================
-class Fireball {
-    constructor(x, y, damage, gameH) {
-        this.x=x; this.y=y;
-        this.targetY=rand(180, gameH-100);
-        this.damage=damage; this.timer=0; this.duration=1.0;
-        this.dead=false; this.exploded=false;
-        this.sprite=Assets.getSprite('skillFire');
-        this.trail=[];
-        this.rotation=rand(0,Math.PI*2);
-        this.rotSpeed=rand(-3,3);
-        this.scale=rand(0.8,1.2);
-    }
-    update(dt, game) {
-        this.timer+=dt;
-        const progress=this.timer/this.duration;
-        this.y=lerp(this.y, this.targetY, 0.06);
-        this.rotation+=this.rotSpeed*dt;
-        this.trail.push({x:this.x, y:this.y, life:0.12, size:3+progress*4});
-        for(let i=this.trail.length-1;i>=0;i--) {
-            this.trail[i].life-=dt;
-            if(this.trail[i].life<=0) this.trail.splice(i,1);
-        }
-        if(this.timer>=this.duration) {
-            if(!this.exploded) {
-                this.exploded=true;
-                game.screenShake=0.2;
-                game.flashAlpha=0.4;
-                game.enemies.forEach(e=>{
-                    if(dist(e,this)<90) e.takeDamage(this.damage,game);
-                });
-                // 爆炸粒子环
-                for(let i=0;i<30;i++) {
-                    const angle=rand(0,Math.PI*2);
-                    const spd=rand(2,7);
-                    game.particles.push(new Particle(this.x,this.y,{
-                        vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd,
-                        color:Math.random()>0.5?'#ff6600':'#ffcc00',
-                        life:0.7, size:rand(3,9), gravity:0.5
-                    }));
-                }
-                // 冲击波粒子
-                for(let i=0;i<12;i++) {
-                    const angle=(i/12)*Math.PI*2;
-                    game.particles.push(new Particle(this.x,this.y,{
-                        vx:Math.cos(angle)*1.5, vy:Math.sin(angle)*1.5,
-                        color:'#ff4400', life:0.25, size:rand(12,22)
-                    }));
-                }
-            }
-            this.dead=true;
-        }
-    }
-    draw(ctx) {
-        const progress=this.timer/this.duration;
-        // 尾迹
-        for(const t of this.trail) {
-            const a=t.life/0.12;
-            ctx.globalAlpha=a*0.7;
-            const grad=ctx.createRadialGradient(t.x,t.y,0,t.x,t.y,t.size);
-            grad.addColorStop(0,'#ffcc00'); grad.addColorStop(1,'rgba(255,100,0,0)');
-            ctx.fillStyle=grad;
-            ctx.beginPath(); ctx.arc(t.x, t.y, t.size, 0, Math.PI*2); ctx.fill();
-        }
-        ctx.globalAlpha=1;
-        const a=this.timer<0.15?this.timer/0.15:1;
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.rotation);
-        const sz=(20+progress*12)*this.scale;
-        if (this.sprite) {
-            ctx.globalAlpha=a;
-            ctx.drawImage(this.sprite, -sz, -sz, sz*2, sz*2);
-        } else {
-            ctx.globalAlpha=a;
-            const grad=ctx.createRadialGradient(0,0,sz*0.2,0,0,sz);
-            grad.addColorStop(0,'#ffff88'); grad.addColorStop(0.5,'#ff6600'); grad.addColorStop(1,'rgba(255,50,0,0)');
-            ctx.fillStyle=grad;
-            ctx.beginPath(); ctx.arc(0,0,sz,0,Math.PI*2); ctx.fill();
-        }
-        // 光晕
-        ctx.globalAlpha=a*0.4;
-        const grad2=ctx.createRadialGradient(0,0,sz*0.5,0,0,sz*1.6);
-        grad2.addColorStop(0,'rgba(255,200,50,0.6)'); grad2.addColorStop(1,'rgba(255,100,0,0)');
-        ctx.fillStyle=grad2;
-        ctx.beginPath(); ctx.arc(0,0,sz*1.6,0,Math.PI*2); ctx.fill();
-        ctx.restore();
-        ctx.globalAlpha=1;
-    }
-}
-
-class IceSword {
-    constructor(x, y, vx, vy, damage) {
-        this.x=x; this.y=y; this.vx=vx; this.vy=vy; this.damage=damage;
-        this.life=1.5; this.maxLife=1.5; this.dead=false; this.hit=new Set();
-        this.sprite=Assets.getSprite('skillIce');
-        this.trail=[];
-        this.rotation=Math.atan2(vy, vx);
-        this.spawnTimer=0;
-    }
-    update(dt, game) {
-        this.spawnTimer+=dt;
-        this.x+=this.vx*60*dt; this.y+=this.vy*60*dt;
-        this.trail.push({x:this.x, y:this.y, life:0.1});
-        for(let i=this.trail.length-1;i>=0;i--) {
-            this.trail[i].life-=dt;
-            if(this.trail[i].life<=0) this.trail.splice(i,1);
-        }
-        // 周期性产生冰晶粒子
-        if(this.spawnTimer>0.06) {
-            this.spawnTimer=0;
-            game.particles.push(new Particle(this.x,this.y,{
-                vx:rand(-0.5,0.5), vy:rand(-0.5,0.5),
-                color:'#88ddff', life:0.25, size:rand(1,3)
-            }));
-        }
-        this.life-=dt; if(this.life<=0) this.dead=true;
-        game.enemies.forEach(e=>{
-            if(this.hit.has(e)) return;
-            if(dist(this,e)<(26+e.size*0.5)) {
-                this.hit.add(e); e.takeDamage(this.damage,game,true);
-                for(let i=0;i<6;i++) {
-                    game.particles.push(new Particle(this.x,this.y,{
-                        vx:rand(-1.5,1.5), vy:rand(-1.5,1.5),
-                        color:'#aaddff', life:0.35, size:rand(2,5)
-                    }));
-                }
-            }
-        });
-    }
-    draw(ctx) {
-        for(const t of this.trail) {
-            const a=t.life/0.1;
-            ctx.globalAlpha=a*0.6;
-            ctx.fillStyle='#88ddff';
-            ctx.beginPath(); ctx.arc(t.x, t.y, 3, 0, Math.PI*2); ctx.fill();
-        }
-        ctx.globalAlpha=1;
-        const a=Math.min(1, this.life/0.25);
-        ctx.save();
-        ctx.globalAlpha=a;
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.rotation);
-        if (this.sprite) {
-            const sz=24;
-            ctx.drawImage(this.sprite, -sz, -sz, sz*2, sz*2);
-        } else {
-            ctx.fillStyle='#66ccff'; ctx.shadowColor='#88ddff'; ctx.shadowBlur=14;
-            ctx.beginPath();
-            ctx.moveTo(14,0); ctx.lineTo(0,-6); ctx.lineTo(-6,0); ctx.lineTo(0,6); ctx.closePath();
-            ctx.fill();
-            ctx.shadowBlur=0;
-        }
-        // 冰晶光晕
-        ctx.globalAlpha=a*0.3;
-        const grad=ctx.createRadialGradient(0,0,2,0,0,20);
-        grad.addColorStop(0,'rgba(150,220,255,0.7)'); grad.addColorStop(1,'rgba(100,200,255,0)');
-        ctx.fillStyle=grad;
-        ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.fill();
-        ctx.restore();
-        ctx.globalAlpha=1;
-    }
-}
-
-// ==================== 村落 ====================
-class Village {
-    constructor(maxHp) {
-        this.maxHp=maxHp; this.hp=maxHp;
-        this.sprite=Assets.getSprite('village');
-        this.hitFlash=0;
-        this.x=0; this.y=0;
-    }
-    setPosition(x, y) { this.x=x; this.y=y; }
-    takeDamage(dmg) {
-        this.hp=Math.max(0, this.hp-dmg);
-        this.hitFlash=0.15;
-        return this.hp<=0;
-    }
-    update(dt) {
-        this.hitFlash=Math.max(0, this.hitFlash-dt);
-    }
-    draw(ctx) {
-        const w=260, h=130;
-        if(this.sprite) {
-            ctx.save();
-            if(this.hitFlash>0) {
-                ctx.globalAlpha = 0.5 + Math.sin(this.hitFlash*30)*0.3;
-            }
-            ctx.drawImage(this.sprite, this.x-w/2, this.y-h/2, w, h);
-            ctx.restore();
-        } else {
-            // Fallback
-            ctx.fillStyle='#8B7355';
-            ctx.fillRect(this.x-100, this.y-55, 200, 110);
-            ctx.fillStyle='#654321';
-            ctx.fillRect(this.x-30, this.y-25, 60, 60);
-            ctx.fillStyle='#DAA520';
-            ctx.fillRect(this.x-35, this.y-30, 70, 6);
-            ctx.fillStyle='rgba(0,0,0,0.3)';
-            ctx.fillRect(this.x-100, this.y-55, 200, 110);
-        }
-        // 村落血条
-        const hpR=this.hp/this.maxHp;
-        const bw=160, bh=8, by=this.y-72;
-        ctx.fillStyle='rgba(0,0,0,0.7)';
-        ctx.fillRect(this.x-bw/2, by, bw, bh);
-        const hpGrad=ctx.createLinearGradient(this.x-bw/2,0,this.x+bw/2,0);
-        hpGrad.addColorStop(0,'#ff4444'); hpGrad.addColorStop(0.5,'#ffaa00'); hpGrad.addColorStop(1,'#44cc44');
-        ctx.fillStyle=hpGrad;
-        ctx.fillRect(this.x-bw/2, by, bw*hpR, bh);
-        ctx.fillStyle='#fff'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
-        ctx.fillText(Math.ceil(this.hp)+'/'+this.maxHp, this.x, by-2);
+        const hpGrad=ctx.createLinearGradient(sx-bw/2,0,sx+bw/2,0);
+        hpGrad.addColorStop(0,'#ff3333');hpGrad.addColorStop(1,'#ff3333');
+        ctx.fillStyle=hpGrad;ctx.fillRect(sx-bw/2,sy,bw*hpR,bh);
+        ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
+        ctx.fillText(Math.ceil(this.hp)+'/'+this.maxHp,sx,sy-2);
         ctx.textAlign='start';
     }
 }
 
-// ==================== 英雄 ====================
-class Hero {
-    constructor(gameW, gameH) {
-        this.size=30;
-        this.x=240; this.y=gameH-140;
-        this.maxHp=CFG.HERO.baseHp; this.hp=this.maxHp; this.atk=CFG.HERO.baseAtk;
-        this.atkSpd=CFG.HERO.baseAtkSpd; this.spd=CFG.HERO.baseSpd;
-        this.level=1; this.xp=0; this.xpToNext=CFG.XP_BASE;
-        this.dead=false; this.invulnTimer=0;
-        this.atkTimer=0; this.moveDir=0;
-        this.bonusBullets=0; this.bonusPierce=0; this.bonusSkillDmg=0; this.bonusSkillCd=0;
-        this.skillCooldowns={fire:0, ice:0};
-        this.sprite=Assets.getSprite('hero');
-        this.animTimer=0;
+// ==================== BOSS ====================
+class Boss extends Enemy{
+    constructor(type,x,y,groundY,cfgOverride){
+        super('sword',x,y,groundY,0);
+        const bcfg=cfgOverride||CFG.BOSS_CFG;
+        this.maxHp=bcfg.hp;this.hp=this.maxHp;
+        this.armor=bcfg.armor;this.armorMax=bcfg.armor;
+        this.atk=bcfg.atk;this.spd=bcfg.spd;
+        this.atkRange=bcfg.atkRange;this.sight=bcfg.sight;
+        this.atkCd=bcfg.atkCd;
+        this.stunDuration=bcfg.stunDuration;
+        this.width=40;this.height=80;
+        this.stunned=false;this.stunTimer=0;
+        this.name=cfgOverride.bossName||'BOSS';
+        this.sprite=Assets.getSprite('boss');
     }
-    getAtk() {
-        let a=this.atk;
-        a+=DB.getPermLv('atk')*3;
-        return a;
-    }
-    getAtkSpd() {
-        let s=this.atkSpd;
-        s+=DB.getPermLv('atkSpd')*0.25;
-        return s;
-    }
-    getSpd() {
-        let s=this.spd;
-        s+=DB.getPermLv('spd')*0.3;
-        return s;
-    }
-    getMaxHp() {
-        let h=this.maxHp;
-        h+=DB.getPermLv('hp')*15;
-        return h;
-    }
-    getSkillDmgMul() {
-        return 1 + DB.getPermLv('skill')*0.08 + this.bonusSkillDmg*0.2;
-    }
-    getSkillCd( type) {
-        const cfg=CFG.SKILLS[type];
-        return Math.max(5, cfg.cooldown - this.bonusSkillCd*2);
-    }
-    getXpToNext() {
-        return Math.floor(CFG.XP_BASE * Math.pow(CFG.XP_GROW, this.level-1));
-    }
-    update(dt, game) {
-        if(this.dead) return;
+    update(dt,player,playerAttacking){
+        if(this.dead){this.deathTimer+=dt;return;}
         this.animTimer+=dt;
-        if(this.invulnTimer>0) this.invulnTimer-=dt;
-        for(const k in this.skillCooldowns) {
-            if(this.skillCooldowns[k]>0) this.skillCooldowns[k]-=dt;
-        }
-        // 移动 - 触屏直接跟随，键盘用方向
-        if(Input.touchActive) {
-            const targetX = Input.getTargetX(game);
-            if(targetX !== null) {
-                const diff = targetX - this.x;
-                const maxStep = this.getSpd() * 60 * dt;
-                if(Math.abs(diff) < maxStep) {
-                    this.x = targetX;
-                    this.moveDir = 0;
-                } else {
-                    this.x += Math.sign(diff) * maxStep;
-                    this.moveDir = Math.sign(diff);
-                }
+        this.atkTimer=Math.max(0,this.atkTimer-dt);
+        this.hitFlash=Math.max(0,this.hitFlash-dt);
+        // 眩晕
+        if(this.stunned){
+            this.stunTimer-=dt;
+            if(this.stunTimer<=0){
+                this.stunned=false;
+                this.armor=this.armorMax;
             }
-        } else {
-            const kb = Input.getKeyboardDir();
-            this.moveDir = kb;
-            this.x += kb * this.getSpd() * 60 * dt;
+            return;
         }
-        this.x = clamp(this.x, this.size*2, game.gameW-this.size*2);
+        const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
+        this.facingRight=player.x>this.x;
+        // 追逐
+        this.vx=(this.facingRight?1:-1)*this.spd;
+        if(d<this.atkRange&&this.atkTimer<=0){
+            this.attacking=true;this.attackFrame=0;this.atkTimer=this.atkCd;
+        }
+        this.x+=this.vx*60*dt;
+        this.y=this.groundY-this.height/2;
         // 攻击
-        this.atkTimer-=dt;
-        if(this.atkTimer<=0) {
-            this.atkTimer=1/this.getAtkSpd();
-            this.shoot(game);
+        if(this.attacking){this.attackFrame+=dt*6;if(this.attackFrame>=1){this.attacking=false;this.attackFrame=0;}}
+        if(this.attacking&&this.attackFrame>0.5&&this.attackFrame<0.55){
+            this.doAttack(player);
         }
     }
-    shoot(game) {
-        const baseCount=1;
-        const totalCount=baseCount + this.bonusBullets;
-        for(let i=0;i<totalCount;i++) {
-            const bx=this.x + (i - (totalCount-1)/2) * 14;
-            const b=new Bullet(bx, this.y-this.size*2, this.getAtk(), 1+this.bonusPierce);
-            game.bullets.push(b);
+    doAttack(player){
+        const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
+        if(d<this.atkRange+30){
+            player.takeDamage(this.atk);
         }
     }
-    takeDamage(dmg) {
-        if(this.invulnTimer>0||this.dead) return false;
-        this.hp-=dmg;
-        this.invulnTimer=0.3;
-        if(this.hp<=0) {
-            this.hp=0; this.dead=true;
+    takeDamage(dmg,knockback){
+        if(this.stunned){
+            this.hp-=dmg;this.hitFlash=0.1;
+            if(this.hp<=0){this.die();return true;}
+            return false;
         }
-        return this.dead;
-    }
-    heal(amount) {
-        this.hp=Math.min(this.getMaxHp(), this.hp+amount);
-    }
-    addXP(xp) {
-        this.xp+=xp;
-        while(this.xp>=this.getXpToNext()&&this.level<CFG.MAX_LEVEL) {
-            this.xp-=this.getXpToNext();
-            this.level++;
-            this.onLevelUp();
+        if(this.armor>0){
+            this.armor-=dmg;this.hitFlash=0.08;
+            if(this.armor<=0){
+                this.armor=0;
+                this.stunned=true;
+                this.stunTimer=this.stunDuration;
+            }
+            return false;
         }
+        this.hp-=dmg;this.hitFlash=0.1;
+        if(this.hp<=0){this.die();return true;}
+        return false;
     }
-    onLevelUp() {
-        window._game.showLevelUp();
-    }
-    applyUpgrade(opt) {
-        switch(opt.id) {
-            case 'hp': this.maxHp+=20; this.heal(20); break;
-            case 'atk': this.atk+=4; break;
-            case 'atkSpd': this.atkSpd+=this.atkSpd*0.15; break;
-            case 'spd': this.spd+=0.5; break;
-            case 'bullet': this.bonusPierce+=1; break;
-            case 'multi': this.bonusBullets+=1; break;
-            case 'heal': this.heal(Math.floor(this.getMaxHp()*0.5)); break;
-            case 'skillDmg': this.bonusSkillDmg+=1; break;
-            case 'skillCd': this.bonusSkillCd+=1; break;
-        }
-    }
-    draw(ctx) {
-        if(this.dead) return;
-        if(this.invulnTimer>0&&Math.floor(this.invulnTimer*20)%2===0) return;
-        const drawSize=this.size*3.5;
-        // 移动时倾斜
-        const tilt=this.moveDir*0.15;
-        // 空闲时上下浮动
-        const idleBob=this.moveDir===0?Math.sin(this.animTimer*3)*2:0;
+    draw(ctx,camX){
+        if(this.dead&&this.deathTimer>0.5) return;
+        const sx=this.x-camX;const sy=this.y;
         ctx.save();
-        ctx.translate(this.x, this.y+idleBob);
-        ctx.rotate(tilt);
-        if (this.sprite) {
-            // 使用完整精灵图，不再分割帧
-            const asp=this.sprite.width/this.sprite.height;
-            let dw=drawSize, dh=drawSize;
-            if(asp>1) dh=drawSize/asp; else dw=drawSize*asp;
-            ctx.drawImage(this.sprite, -dw/2, -dh/2, dw, dh);
-        } else {
-            // 回退绘制
-            const grad=ctx.createRadialGradient(0,-5,5,0,0,this.size*1.5);
-            grad.addColorStop(0,'#ffcc00'); grad.addColorStop(0.6,'#cc8800'); grad.addColorStop(1,'rgba(150,80,0,0)');
-            ctx.fillStyle=grad;
-            ctx.beginPath(); ctx.arc(0,0,this.size*1.2,0,Math.PI*2); ctx.fill();
-            ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-8,6,0,Math.PI*2); ctx.fill();
+        ctx.translate(sx,sy);
+        if(this.dead){ctx.globalAlpha=1-this.deathTimer*2;ctx.rotate(this.deathTimer*3);}
+        if(!this.facingRight) ctx.scale(-1,1);
+        if(this.hitFlash>0&&!this.stunned){ctx.globalAlpha=0.5;}
+        if(this.stunned){
+            ctx.globalAlpha=0.4+Math.sin(Date.now()*0.02)*0.3;
         }
+        this.drawBossStickman(ctx,0,0);
         ctx.restore();
-        // 底部光环
-        ctx.fillStyle='rgba(255,200,0,0.2)';
-        ctx.beginPath(); ctx.ellipse(this.x, this.y+this.size*1.5+idleBob, this.size*1.2, 6, 0, 0, Math.PI*2); ctx.fill();
+        // 血条和护甲条
+        if(!this.dead) this.drawBossBars(ctx,camX);
+    }
+    drawBossStickman(ctx,ox,oy){
+        const h=this.height;
+        const bodyLen=h*0.28;
+        // 身体
+        ctx.strokeStyle='#111';ctx.lineWidth=5;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.3);ctx.lineTo(ox,oy+bodyLen*0.7);ctx.stroke();
+        // 护甲外框
+        ctx.strokeStyle='#555';ctx.lineWidth=2;
+        ctx.strokeRect(ox-12,oy-bodyLen*0.2-2,24,bodyLen*1.1);
+        // 头
+        ctx.fillStyle='#111';ctx.beginPath();ctx.arc(ox,oy-bodyLen*0.3-12,13,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#f00';ctx.beginPath();ctx.arc(ox-4,oy-bodyLen*0.3-14,3,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ox+4,oy-bodyLen*0.3-14,3,0,Math.PI*2);ctx.fill();
+        // 角
+        ctx.strokeStyle='#111';ctx.lineWidth=3;
+        ctx.beginPath();ctx.moveTo(ox-8,oy-bodyLen*0.3-22);ctx.lineTo(ox-14,oy-bodyLen*0.3-32);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ox+8,oy-bodyLen*0.3-22);ctx.lineTo(ox+14,oy-bodyLen*0.3-32);ctx.stroke();
+        // 腿
+        ctx.lineWidth=5;
+        ctx.beginPath();ctx.moveTo(ox,oy+bodyLen*0.7);ctx.lineTo(ox-16,oy+h*0.45);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ox,oy+bodyLen*0.7);ctx.lineTo(ox+16,oy+h*0.45);ctx.stroke();
+        // 手臂
+        const armLen=bodyLen*0.9;
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+        ctx.lineTo(ox+Math.cos(Math.PI*0.3)*armLen,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen);
+        ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+        ctx.lineTo(ox-Math.cos(Math.PI*0.3)*armLen,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen);
+        ctx.stroke();
+        // 大武器
+        if(this.attacking){
+            ctx.strokeStyle='#ff4444';ctx.lineWidth=6;
+            ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.1);
+            ctx.lineTo(ox+Math.cos(Math.PI*0.3)*armLen*2,oy-bodyLen*0.1-Math.sin(Math.PI*0.3)*armLen*2);
+            ctx.stroke();
+        }
+    }
+    drawBossBars(ctx,camX){
+        const sx=this.x-camX;const sy=this.y-this.height/2-20;
+        const bw=50,bh=5;
+        // 护甲条
+        if(this.armorMax>0){
+            ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy,bw,bh);
+            const arR=this.armor/this.armorMax;
+            ctx.fillStyle='#4488ff';ctx.fillRect(sx-bw/2,sy,bw*arR,bh);
+            ctx.fillStyle='#fff';ctx.font='bold 7px sans-serif';ctx.textAlign='center';
+            ctx.fillText('护甲',sx,sy-2);
+        }
+        // 血条
+        const sy2=sy-8;
+        ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy2,bw,bh);
+        const hpR=this.hp/this.maxHp;
+        ctx.fillStyle='#ff3333';ctx.fillRect(sx-bw/2,sy2,bw*hpR,bh);
+        ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
+        ctx.fillText(this.name+' '+Math.ceil(this.hp)+'/'+this.maxHp,sx,sy2-2);
+        if(this.stunned){
+            ctx.fillStyle='#ffcc00';ctx.font='bold 12px sans-serif';
+            ctx.fillText('眩晕 '+Math.ceil(this.stunTimer)+'s',sx,sy-30);
+        }
+        ctx.textAlign='start';
     }
 }
 
-// ==================== 输入 ====================
-const Input = {
-    keys: {}, touchActive:false, touchX:0,
-    init() {
-        window.addEventListener('keydown',e=>{
-            this.keys[e.key.toLowerCase()]=true;
-            if(e.key==='Escape') { e.preventDefault(); window._game?.togglePause(); }
-            if(e.key===' ') e.preventDefault();
-        });
-        window.addEventListener('keyup',e=>{ this.keys[e.key.toLowerCase()]=false; });
-        const canvas=document.getElementById('gameCanvas');
-        if(canvas) {
-            canvas.addEventListener('touchstart',e=>{
-                e.preventDefault();
-                this.touchActive=true;
-                this.touchX=e.touches[0].clientX;
-            },{passive:false});
-            canvas.addEventListener('touchmove',e=>{
-                e.preventDefault();
-                this.touchX=e.touches[0].clientX;
-            },{passive:false});
-            canvas.addEventListener('touchend',e=>{ e.preventDefault(); this.touchActive=false; },{passive:false});
-            canvas.addEventListener('touchcancel',e=>{ this.touchActive=false; });
-            canvas.addEventListener('mousedown',e=>{
-                this.touchActive=true; this.touchX=e.clientX;
-            });
-            window.addEventListener('mousemove',e=>{
-                if(this.touchActive) this.touchX=e.clientX;
-            });
-            window.addEventListener('mouseup',()=>{ this.touchActive=false; });
-        }
-    },
-    getTargetX(game) {
-        if(this.touchActive) {
-            const canvas=document.getElementById('gameCanvas');
-            if(!canvas) return null;
-            const rect=canvas.getBoundingClientRect();
-            const relX=this.touchX-rect.left;
-            const scale=rect.width/game.gameW;
-            const worldX=relX/scale;
-            return clamp(worldX, game.hero.size*2, game.gameW-game.hero.size*2);
-        }
-        return null;
-    },
-    getKeyboardDir() {
-        let d=0;
-        if(this.keys['a']||this.keys['arrowleft']) d=-1;
-        if(this.keys['d']||this.keys['arrowright']) d=1;
-        return d;
-    },
-};
-
-// ==================== 波次数据 ====================
-function getWaveData(waveNum) {
-    const data={enemies:[], total:0};
-    if(waveNum<=5) {
-        data.enemies.push({type:'slime', count:3+waveNum*2});
-        if(waveNum>=3) data.enemies.push({type:'skeleton', count:waveNum-2});
-    } else if(waveNum<=10) {
-        data.enemies.push({type:'slime', count:4+waveNum});
-        data.enemies.push({type:'skeleton', count:3+(waveNum-5)*2});
-        if(waveNum>=8) data.enemies.push({type:'demon', count:waveNum-7});
-    } else if(waveNum<=15) {
-        data.enemies.push({type:'slime', count:5+waveNum});
-        data.enemies.push({type:'skeleton', count:5+(waveNum-10)*2});
-        data.enemies.push({type:'demon', count:3+(waveNum-10)*2});
-        if(waveNum>=14) data.enemies.push({type:'boss', count:1});
-    } else {
-        data.enemies.push({type:'slime', count:6+waveNum});
-        data.enemies.push({type:'skeleton', count:8+(waveNum-15)*2});
-        data.enemies.push({type:'demon', count:5+(waveNum-15)*2});
-        data.enemies.push({type:'boss', count:waveNum>=18?2:1});
+// ==================== 虚拟摇杆 ====================
+class Joystick{
+    constructor(){
+        this.baseX=0;this.baseY=0;this.thumbX=0;this.thumbY=0;
+        this.active=false;this.touchId=null;
+        this.dx=0;this.dy=0;
+        this.jumpPressed=false;
     }
-    return data;
+    setBase(x,y){
+        this.baseX=x;this.baseY=y;this.thumbX=x;this.thumbY=y;
+    }
+    handleDown(tx,ty,touchId){
+        const jd=dist({x:tx,y:ty},{x:this.baseX,y:this.baseY});
+        if(jd<80){
+            this.active=true;this.touchId=touchId;
+            this.updateThumb(tx,ty);
+        }
+        return this.active;
+    }
+    handleMove(tx,ty,touchId){
+        if(this.active&&this.touchId===touchId){
+            this.updateThumb(tx,ty);
+            return true;
+        }
+        return false;
+    }
+    handleUp(touchId){
+        if(this.touchId===touchId){
+            this.active=false;this.touchId=null;
+            this.thumbX=this.baseX;this.thumbY=this.baseY;
+            this.dx=0;this.dy=0;
+            return true;
+        }
+        return false;
+    }
+    updateThumb(tx,ty){
+        let dx=tx-this.baseX;let dy=ty-this.baseY;
+        const d=Math.sqrt(dx*dx+dy*dy);const maxR=60;
+        if(d>maxR){dx=dx/d*maxR;dy=dy/d*maxR;}
+        this.thumbX=this.baseX+dx;this.thumbY=this.baseY+dy;
+        this.dx=dx/maxR;this.dy=dy/maxR;
+    }
+    draw(ctx){
+        // 底座
+        ctx.fillStyle='rgba(255,255,255,0.1)';ctx.strokeStyle='rgba(255,255,255,0.25)';
+        ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(this.baseX,this.baseY,60,0,Math.PI*2);ctx.fill();ctx.stroke();
+        // 内圈
+        ctx.fillStyle='rgba(255,255,255,0.05)';
+        ctx.beginPath();ctx.arc(this.baseX,this.baseY,40,0,Math.PI*2);ctx.fill();
+        // 拇指
+        ctx.fillStyle='rgba(255,255,255,0.3)';
+        ctx.beginPath();ctx.arc(this.thumbX,this.thumbY,22,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle='rgba(255,255,255,0.5)';
+        ctx.beginPath();ctx.arc(this.thumbX,this.thumbY,22,0,Math.PI*2);ctx.stroke();
+        // 十字标记
+        ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(this.baseX-10,this.baseY);ctx.lineTo(this.baseX+10,this.baseY);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(this.baseX,this.baseY-10);ctx.lineTo(this.baseX,this.baseY+10);ctx.stroke();
+    }
 }
 
 // ==================== 游戏主类 ====================
-let _activeGameId = 0;
-
-class Game {
-    constructor(stageId) {
-        // 停止旧游戏实例
-        if(window._game && window._game !== this) {
-            window._game.running = false;
-        }
-        this._gameId = ++_activeGameId;
-        window._game = this;
-        this.stageCfg=CFG.STAGES.find(s=>s.id===stageId)||CFG.STAGES[0];
-        this.gameW=480; this.gameH=800;
+class Game{
+    constructor(){
         this.canvas=document.getElementById('gameCanvas');
         this.ctx=this.canvas.getContext('2d');
         this.resize();
-        window.addEventListener('resize', ()=>this.resize());
-        // 状态
-        this.enemies=[]; this.bullets=[]; this.particles=[];
-        this.fireballs=[]; this.iceSwords=[];
-        this.running=true; this.paused=false;
-        this.currentWave=0; this.waveEnemies=[]; this.waveActive=false;
-        this.waveSpawnTimer=0; this.waveSpawnInterval=0.5;
-        this.kills=0; this.score=0; this.goldEarned=0;
-        this.screenShake=0; this.flashAlpha=0; this._pendingWave=false;
-        this.gameOver=false; this.victory=false;
-        this.village=new Village(this.stageCfg.villageHp);
-        this.hero=new Hero(this.gameW, this.gameH);
-        this.hero.maxHp=this.hero.getMaxHp(); this.hero.hp=this.hero.maxHp;
-        this.setupUI();
-        this.showWaveTransition();
+        this.sceneIdx=DB.data.scene-1;
+        this.sceneCfg=CFG.SCENES[this.sceneIdx];
+        this.worldW=this.sceneCfg.width;
+        this.groundY=this.gameH*0.82;
+        this.camX=0;
+        this.joystick=new Joystick();
+        this.player=new Player(150,this.groundY-60);
+        this.enemies=[];
+        this.boss=null;
+        this.particles=[];
+        this.state='playing'; // playing victory gameover
+        this.victoryScene=false;
+        this.gameOverCause='';
+        this.sceneClear=false;
+        this.time=0;
         this.lastTime=0;
-        this.gameLoop(0);
-    }
-    resize() {
-        const maxW=Math.min(window.innerWidth, 520);
-        const maxH=Math.min(window.innerHeight, 880);
-        const scaleX=maxW/this.gameW;
-        const scaleY=maxH/this.gameH;
-        this.scale=Math.min(scaleX, scaleY);
-        this.canvas.width=maxW;
-        this.canvas.height=maxH;
-        this.renderX=(maxW-this.gameW*this.scale)/2;
-        this.renderY=(maxH-this.gameH*this.scale)/2;
-    }
-    setupUI() {
-        // 注意：btnUpgrade 在主菜单已绑定，这里不覆盖
-        document.getElementById('btnSkill1').onclick=()=>this.useSkill('fire');
-        document.getElementById('btnSkill2').onclick=()=>this.useSkill('ice');
-        document.getElementById('btnPause').onclick=()=>this.togglePause();
-        document.getElementById('btnWaveStart').onclick=()=>this.startWave();
-        document.getElementById('btnResume').onclick=()=>this.togglePause();
-        document.getElementById('btnQuit').onclick=()=>this.quitGame();
-        document.getElementById('btnRetry').onclick=()=>this.restartGame();
-        document.getElementById('btnVictory').onclick=()=>this.quitGame();
-    }
-    gameLoop(timestamp) {
-        if(!this.running || this._gameId !== _activeGameId) return;
-        const dt=Math.min(0.05, (timestamp-this.lastTime)/1000);
-        this.lastTime=timestamp;
-        if(!this.paused) this.update(dt);
-        this.render();
-        this.updateHUD();
+        this.shakeTimer=0;
+        this.shakeIntensity=0;
+        this.initScene();
+        this.setupInput();
+        this.running=true;
+        this.lastTime=performance.now();
         requestAnimationFrame(t=>this.gameLoop(t));
     }
-    update(dt) {
-        // 屏幕震动衰减
-        if(this.screenShake>0) this.screenShake=Math.max(0,this.screenShake-dt*1.5);
-        if(this.flashAlpha>0) this.flashAlpha=Math.max(0,this.flashAlpha-dt*2);
-        const h=this.hero;
-        // 英雄
-        h.update(dt, this);
-        // 村落
-        this.village.update(dt);
-        // 波次生成
-        if(this.waveActive) {
-            this.waveSpawnTimer-=dt;
-            if(this.waveSpawnTimer<=0&&this.waveEnemies.length>0) {
-                const entry=this.waveEnemies.shift();
-                for(let j=0;j<entry.count;j++) {
-                    const margin=40;
-                    const ex=rand(margin, this.gameW-margin);
-                    const e=new Enemy(entry.type, ex, -rand(20,80), this.stageCfg);
-                    this.enemies.push(e);
-                }
-                this.waveSpawnTimer=this.waveSpawnInterval;
-            }
-            // 波次完成
-            if(this.waveEnemies.length===0&&this.enemies.length===0&&this.fireballs.length===0&&this.iceSwords.length===0) {
-                this.waveActive=false;
-                if(this.currentWave>=CFG.MAX_WAVES) {
-                    this.onVictory();
-                } else {
-                    setTimeout(()=>this.showWaveTransition(), 500);
-                }
-            }
-        }
-        // 子弹
-        for(let i=this.bullets.length-1;i>=0;i--) {
-            const b=this.bullets[i];
-            b.update(dt);
-            if(b.dead) { this.bullets.splice(i,1); continue; }
-            for(let j=this.enemies.length-1;j>=0;j--) {
-                const e=this.enemies[j];
-                if(b.hit.has(e)) continue;
-                if(dist(b,e)<(b.size*0.8+e.size*0.4)) {
-                    b.hit.add(e);
-                    const killed=e.takeDamage(b.damage, this);
-                    if(killed) {
-                        this.enemies.splice(j,1);
-                    }
-                    if(b.hit.size>=b.pierce) {
-                        b.dead=true; break;
-                    }
+    resize(){
+        const w=window.innerWidth;const h=window.innerHeight;
+        const ratio=Math.min(w/480,h/800);
+        this.gameW=480;this.gameH=800;
+        this.canvas.width=480;this.canvas.height=800;
+        this.canvas.style.width=(480*ratio)+'px';
+        this.canvas.style.height=(800*ratio)+'px';
+        this.canvas.style.position='absolute';
+        this.canvas.style.left=((w-480*ratio)/2)+'px';
+        this.canvas.style.top=((h-800*ratio)/2)+'px';
+        this.scale=ratio;
+        this.joystick.setBase(90,this.gameH*0.72);
+    }
+    initScene(){
+        this.enemies=[];
+        this.boss=null;
+        this.sceneClear=false;
+        const cfg=this.sceneCfg;
+        const spawnArea=this.worldW*0.4;
+        if(cfg.boss){
+            this.boss=new Boss('sword',spawnArea+rand(0,200),this.groundY-40,this.groundY,{
+                hp:CFG.BOSS_CFG.hp+(this.sceneIdx>=7?200:0),
+                armor:CFG.BOSS_CFG.armor+(this.sceneIdx>=7?100:0),
+                atk:CFG.BOSS_CFG.atk+(this.sceneIdx>=7?10:0),
+                spd:CFG.BOSS_CFG.spd,
+                atkRange:CFG.BOSS_CFG.atkRange,
+                sight:CFG.BOSS_CFG.sight,
+                atkCd:CFG.BOSS_CFG.atkCd,
+                stunDuration:CFG.BOSS_CFG.stunDuration,
+                xp:CFG.BOSS_CFG.xp,
+                bossName:cfg.bossName||'BOSS',
+                finalBoss:cfg.finalBoss||false,
+            });
+        }else{
+            let idx=0;
+            for(const group of cfg.enemies){
+                for(let i=0;i<group.count;i++){
+                    const ex=spawnArea+rand(i*120,i*120+100);
+                    this.enemies.push(new Enemy(group.type,ex,this.groundY-29,this.groundY,idx++));
                 }
             }
         }
-        // 清理标记死亡的子弹
-        for(let i=this.bullets.length-1;i>=0;i--) {
-            if(this.bullets[i].dead) this.bullets.splice(i,1);
-        }
-        // 敌人
-        for(let i=this.enemies.length-1;i>=0;i--) {
-            const e=this.enemies[i];
-            e.update(dt);
-            if(e.dead) { this.enemies.splice(i,1); continue; }
-            // 碰到底线 - 攻击村落
-            if(e.hasReachedBottom(this.gameH)) {
-                const destroyed=this.village.takeDamage(e.villageDmg);
-                e.dead=true;
-                this.enemies.splice(i,1);
-                // 碰底粒子
-                for(let j=0;j<8;j++) {
-                    this.particles.push(new Particle(e.x,this.gameH-20,{
-                        vx:rand(-3,3), vy:rand(-4,0), color:'#ff4444', life:0.4, size:rand(2,5)
-                    }));
-                }
-                if(this.village.hp<=0) {
-                    this.onGameOver();
-                    return;
-                }
+        // 玩家位置
+        this.player.x=100;
+        this.player.y=this.groundY-30;
+        this.player.vx=0;this.player.vy=0;
+        this.player.grounded=true;
+        this.camX=0;
+    }
+    setupInput(){
+        // 触摸
+        this.canvas.addEventListener('touchstart',e=>this.onTouchStart(e),{passive:false});
+        this.canvas.addEventListener('touchmove',e=>this.onTouchMove(e),{passive:false});
+        this.canvas.addEventListener('touchend',e=>this.onTouchEnd(e),{passive:false});
+        this.canvas.addEventListener('touchcancel',e=>this.onTouchEnd(e),{passive:false});
+        // 鼠标
+        this.canvas.addEventListener('mousedown',e=>this.onMouseDown(e));
+        window.addEventListener('mousemove',e=>this.onMouseMove(e));
+        window.addEventListener('mouseup',e=>this.onMouseUp(e));
+        // 键盘
+        window.addEventListener('keydown',e=>this.onKeyDown(e));
+        window.addEventListener('keyup',e=>this.onKeyUp(e));
+        // 窗口大小变化
+        window.addEventListener('resize',()=>this.resize());
+        // 按钮区域
+        this.btnAreas={
+            skill:{x:this.gameW*0.85,y:this.gameH*0.55,r:this.gameW*0.07},
+            jump:{x:this.gameW*0.85,y:this.gameH*0.68,r:this.gameW*0.07},
+            attack:{x:this.gameW*0.85,y:this.gameH*0.82,r:this.gameW*0.1},
+        };
+    }
+    screenToGame(clientX,clientY){
+        const rect=this.canvas.getBoundingClientRect();
+        return {
+            x:(clientX-rect.left)/this.scale,
+            y:(clientY-rect.top)/this.scale
+        };
+    }
+    onTouchStart(e){
+        e.preventDefault();
+        for(const t of e.changedTouches){
+            const p=this.screenToGame(t.clientX,t.clientY);
+            // 游戏结束/胜利点击
+            if(this.state==='gameover'||this.state==='victory'){
+                this.handleClick(p.x,p.y);
+                return;
             }
+            if(this.joystick.handleDown(p.x,p.y,t.identifier)) continue;
+            const btn=this.checkButton(p.x,p.y);
+            if(btn) this.handleButton(btn);
         }
-        // 碰撞检测 - 敌人撞英雄
-        for(let i=this.enemies.length-1;i>=0;i--) {
-            const e=this.enemies[i];
-            if(dist(e,h)<(e.size*0.4+h.size*1.2)) {
-                const heroDead=h.takeDamage(e.damage);
-                if(heroDead) {
-                    this.onGameOver();
-                    return;
-                }
-            }
+    }
+    onTouchMove(e){
+        e.preventDefault();
+        for(const t of e.changedTouches){
+            const p=this.screenToGame(t.clientX,t.clientY);
+            this.joystick.handleMove(p.x,p.y,t.identifier);
         }
-        // 火球
-        for(let i=this.fireballs.length-1;i>=0;i--) {
-            this.fireballs[i].update(dt, this);
-            if(this.fireballs[i].dead) this.fireballs.splice(i,1);
+    }
+    onTouchEnd(e){
+        for(const t of e.changedTouches){
+            this.joystick.handleUp(t.identifier);
         }
-        // 冰剑
-        for(let i=this.iceSwords.length-1;i>=0;i--) {
-            this.iceSwords[i].update(dt, this);
-            if(this.iceSwords[i].dead) this.iceSwords.splice(i,1);
-        }
-        // 粒子
-        for(let i=this.particles.length-1;i>=0;i--) {
-            this.particles[i].update(dt);
-            if(this.particles[i].dead) this.particles.splice(i,1);
-        }
-        // 检查英雄死亡
-        if(h.dead) {
-            this.onGameOver();
+    }
+    onMouseDown(e){
+        const p=this.screenToGame(e.clientX,e.clientY);
+        // 游戏结束/胜利点击
+        if(this.state==='gameover'||this.state==='victory'){
+            this.handleClick(p.x,p.y);
             return;
         }
-        // 弹药限制
-        if(this.bullets.length>300) this.bullets.splice(0,100);
-        if(this.particles.length>200) this.particles.splice(0,50);
+        if(this.joystick.handleDown(p.x,p.y,'mouse')) return;
+        const btn=this.checkButton(p.x,p.y);
+        if(btn) this.handleButton(btn);
     }
-    render() {
-        const ctx=this.ctx;
-        ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-        ctx.fillStyle='#0a0a1a';
-        ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+    onMouseMove(e){
+        if(!e.buttons) return;
+        const p=this.screenToGame(e.clientX,e.clientY);
+        this.joystick.handleMove(p.x,p.y,'mouse');
+    }
+    onMouseUp(e){
+        this.joystick.handleUp('mouse');
+    }
+    onKeyDown(e){
+        switch(e.key){
+            case 'ArrowLeft':case 'a':this.joystick.dx=-1;break;
+            case 'ArrowRight':case 'd':this.joystick.dx=1;break;
+            case 'ArrowUp':case 'w':this.joystick.dy=-1;break;
+            case 'ArrowDown':case 's':this.joystick.dy=1;break;
+            case 'j':case 'J':this.handleButton('attack');break;
+            case 'k':case 'K':this.handleButton('jump');break;
+            case 'l':case 'L':this.handleButton('skill');break;
+        }
+    }
+    onKeyUp(e){
+        switch(e.key){
+            case 'ArrowLeft':case 'a':case 'ArrowRight':case 'd':
+                if(!e.ctrlKey&&!e.metaKey) this.joystick.dx=0;break;
+            case 'ArrowUp':case 'w':case 'ArrowDown':case 's':
+                if(!e.ctrlKey&&!e.metaKey) this.joystick.dy=0;break;
+        }
+    }
+    checkButton(gx,gy){
+        for(const k in this.btnAreas){
+            const b=this.btnAreas[k];
+            if(dist({x:gx,y:gy},{x:b.x,y:b.y})<b.r) return k;
+        }
+        return null;
+    }
+    handleButton(btn){
+        if(this.state!=='playing') return;
+        switch(btn){
+            case 'attack':this.playerAttack();break;
+            case 'jump':this.joystick.jumpPressed=true;break;
+            case 'skill':this.playerSkill();break;
+        }
+    }
+    playerAttack(){
+        if(this.state!=='playing') return;
+        const hit=this.player.attack();
+        if(!hit) return;
+        this.checkHit(hit);
+    }
+    playerSkill(){
+        if(this.state!=='playing') return;
+        const hit=this.player.skill();
+        if(!hit) return;
+        this.checkHit(hit);
+        this.shakeTimer=0.15;this.shakeIntensity=4;
+        for(let i=0;i<20;i++){
+            this.particles.push(new Particle(hit.x+hit.w/2,hit.y+hit.h/2,{
+                vx:rand(-3,3),vy:rand(-3,1),color:'#ff6644',life:0.5,size:rand(3,6),gravity:1
+            }));
+        }
+    }
+    checkHit(hit){
+        // 检查敌人
+        for(const enemy of this.enemies){
+            if(enemy.dead) continue;
+            if(this.hitOverlap(hit,enemy)){
+                const killed=enemy.takeDamage(hit.damage,hit.knockback);
+                this.spawnHitParticles(enemy.x,enemy.y,hit.color);
+                if(killed) this.spawnDeathParticles(enemy.x,enemy.y);
+            }
+        }
+        // 检查BOSS
+        if(this.boss&&!this.boss.dead){
+            if(this.hitOverlap(hit,this.boss)){
+                const killed=this.boss.takeDamage(hit.damage,hit.knockback);
+                this.spawnHitParticles(this.boss.x,this.boss.y,hit.color);
+                if(killed) this.spawnDeathParticles(this.boss.x,this.boss.y);
+            }
+        }
+    }
+    hitOverlap(hit,entity){
+        return hit.x-hit.w/2<entity.x+entity.width/2&&
+               hit.x+hit.w/2>entity.x-entity.width/2&&
+               hit.y-hit.h/2<entity.y+entity.height/2&&
+               hit.y+hit.h/2>entity.y-entity.height/2;
+    }
+    spawnHitParticles(x,y,color){
+        for(let i=0;i<8;i++){
+            this.particles.push(new Particle(x,y,{
+                vx:rand(-2,2),vy:rand(-2,1),color:color,life:0.3,size:rand(2,4)
+            }));
+        }
+    }
+    spawnDeathParticles(x,y){
+        for(let i=0;i<15;i++){
+            this.particles.push(new Particle(x,y,{
+                vx:rand(-3,3),vy:rand(-3,1),color:'#ffaa00',life:0.6,size:rand(2,5),gravity:0.5
+            }));
+        }
+    }
+    checkSceneClear(){
+        if(this.sceneClear) return;
+        if(this.boss){
+            if(this.boss.dead&&this.boss.deathTimer>0.5){
+                this.sceneClear=true;
+                this.onSceneVictory();
+            }
+        }else{
+            const allDead=this.enemies.every(e=>e.dead);
+            if(allDead&&this.enemies.length>0){
+                this.sceneClear=true;
+                this.onSceneVictory();
+            }
+        }
+    }
+    onSceneVictory(){
+        if(this.sceneCfg.boss){
+            if(this.sceneCfg.finalBoss){
+                this.state='victory';
+                this.victoryScene=true;
+            }
+        }
+        if(this.sceneIdx>=CFG.SCENES.length-1){
+            this.state='victory';this.victoryScene=true;
+        }
+        // 自动进入下一场景
+        setTimeout(()=>{
+            if(this.state==='victory') return;
+            this.sceneIdx++;
+            if(this.sceneIdx>=CFG.SCENES.length){
+                this.state='victory';this.victoryScene=true;
+                return;
+            }
+            this.sceneCfg=CFG.SCENES[this.sceneIdx];
+            this.worldW=this.sceneCfg.width;
+            DB.data.scene=this.sceneIdx+1;
+            if(this.sceneIdx+1>DB.data.maxScene) DB.data.maxScene=this.sceneIdx+1;
+            DB.save();
+            this.initScene();
+        },1500);
+    }
+    gameLoop(timestamp){
+        if(!this.running) return;
+        const dt=Math.min(0.05,(timestamp-this.lastTime)/1000);
+        this.lastTime=timestamp;
+        this.time+=dt;
+        if(this.state==='playing') this.update(dt);
+        this.render();
+        requestAnimationFrame(t=>this.gameLoop(t));
+    }
+    update(dt){
         // 屏幕震动
-        let shakeX=0, shakeY=0;
-        if(this.screenShake>0) {
-            shakeX=rand(-5,5)*this.screenShake*8;
-            shakeY=rand(-4,4)*this.screenShake*8;
+        if(this.shakeTimer>0) this.shakeTimer=Math.max(0,this.shakeTimer-dt);
+        // 玩家
+        const playerAttacking=this.player.attacking||this.player.skilling;
+        this.player.update(dt,this.joystick,this.gameW,this.gameH,this.worldW,this.groundY);
+        // 相机跟随
+        const targetCamX=this.player.x-this.gameW/2;
+        this.camX+=(targetCamX-this.camX)*0.1;
+        this.camX=clamp(this.camX,0,this.worldW-this.gameW);
+        // 敌人
+        for(const enemy of this.enemies){
+            if(!enemy.dead) enemy.update(dt,this.player,playerAttacking);
+        }
+        if(this.boss&&!this.boss.dead) this.boss.update(dt,this.player,playerAttacking);
+        // 粒子
+        for(const p of this.particles) p.update(dt);
+        this.particles=this.particles.filter(p=>!p.dead);
+        // 场景检测
+        this.checkSceneClear();
+        // 玩家死亡
+        if(this.player.hp<=0){
+            this.state='gameover';this.gameOverCause='被敌人击败';
+        }
+        // 重置跳跃
+        if(!this.player.grounded) this.joystick.jumpPressed=false;
+    }
+    render(){
+        const ctx=this.ctx;
+        const w=this.gameW,h=this.gameH;
+        ctx.clearRect(0,0,w,h);
+        // 震动偏移
+        let sx=0,sy=0;
+        if(this.shakeTimer>0){
+            sx=rand(-this.shakeIntensity,this.shakeIntensity);
+            sy=rand(-this.shakeIntensity,this.shakeIntensity);
         }
         ctx.save();
-        ctx.translate(this.renderX+shakeX, this.renderY+shakeY);
-        ctx.scale(this.scale, this.scale);
-        // 背景 - 使用关卡专属背景
-        const bgKey=this.stageCfg.bgKey||'bg_grassland';
-        const bgImg=Assets.getRaw(bgKey);
-        if(bgImg&&bgImg.complete) {
-            ctx.drawImage(bgImg, 0, 0, this.gameW, this.gameH);
-            ctx.fillStyle='rgba(0,0,0,0.2)';
-            ctx.fillRect(0,0,this.gameW,this.gameH);
-        } else {
-            ctx.fillStyle='#1a2a1a';
-            ctx.fillRect(0,0,this.gameW,this.gameH);
+        ctx.translate(sx,sy);
+        // 天空
+        ctx.fillStyle=this.sceneCfg.sky;
+        ctx.fillRect(0,0,w,h);
+        // 远山
+        ctx.fillStyle=this.alphaColor(this.sceneCfg.sky,0.7);
+        this.drawHills(ctx,0.2);
+        // 地面
+        ctx.fillStyle=this.sceneCfg.ground;
+        ctx.fillRect(0,this.groundY,w,h-this.groundY);
+        // 地面线
+        ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(0,this.groundY);ctx.lineTo(w,this.groundY);ctx.stroke();
+        // 地面纹理
+        ctx.fillStyle='rgba(0,0,0,0.05)';
+        for(let i=0;i<w;i+=40){
+            ctx.fillRect(i-this.camX*0.1,this.groundY+10,20,2);
         }
-        // 底部防线
-        // 村落（画在背景之上，单位之下）
-        this.village.setPosition(this.gameW/2, this.gameH-65);
-        this.village.draw(ctx);
-        // 防线
-        ctx.strokeStyle='rgba(255,80,80,0.2)'; ctx.lineWidth=1;
-        ctx.setLineDash([8,4]);
-        ctx.beginPath(); ctx.moveTo(0,this.gameH-15); ctx.lineTo(this.gameW,this.gameH-15); ctx.stroke();
-        ctx.setLineDash([]);
-        // 粒子
-        for(const pt of this.particles) pt.draw(ctx);
-        // 火球
-        for(const fb of this.fireballs) fb.draw(ctx);
-        // 冰剑
-        for(const is of this.iceSwords) is.draw(ctx);
+        // 边界标记
+        if(this.camX<=5){
+            ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+            ctx.fillText('◀',30,h/2);
+        }
+        if(this.camX>=this.worldW-w-5){
+            ctx.fillStyle=(this.sceneClear||this.sceneCfg.boss)?'rgba(255,255,255,0.3)':'rgba(255,100,100,0.5)';
+            ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+            ctx.fillText(this.sceneClear?'▶ 进入下一关':'▶ 击败敌人',w-30,h/2);
+        }
+        ctx.textAlign='start';
+        // 场景名称
+        ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='bold 12px sans-serif';ctx.textAlign='right';
+        ctx.fillText('第'+(this.sceneIdx+1)+'关 '+this.sceneCfg.name,w-15,25);
+        ctx.textAlign='start';
         // 敌人
-        for(const e of this.enemies) e.draw(ctx);
-        // 子弹
-        for(const b of this.bullets) b.draw(ctx);
-        // 英雄
-        if(this.hero) this.hero.draw(ctx);
-        ctx.restore();
-        // 全屏闪光
-        if(this.flashAlpha>0) {
-            ctx.fillStyle=`rgba(255,200,100,${this.flashAlpha})`;
-            ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+        for(const enemy of this.enemies){
+            if(!enemy.dead||enemy.deathTimer<0.5) enemy.draw(ctx,this.camX);
         }
-        // 波次提示
-        if(this.waveActive) {
-            ctx.fillStyle='#ffcc00'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
-            ctx.fillText('第 '+this.currentWave+' 波', this.canvas.width/2, 30);
+        if(this.boss&&(!this.boss.dead||this.boss.deathTimer<0.5)) this.boss.draw(ctx,this.camX);
+        // 玩家
+        this.player.draw(ctx,this.camX,this.groundY);
+        // 粒子
+        for(const p of this.particles) p.draw(ctx,this.camX);
+        ctx.restore();
+        // UI（不受震动影响）
+        // 摇杆
+        this.joystick.draw(ctx);
+        // 按钮
+        this.drawButtons(ctx);
+        // 玩家血条
+        this.drawPlayerHUD(ctx);
+        // 武器信息
+        this.drawWeaponInfo(ctx);
+        // 场景进度
+        if(this.sceneClear){
+            ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 20px sans-serif';ctx.textAlign='center';
+            ctx.fillText('敌人已清除!',w/2,h/2-40);
+            ctx.textAlign='start';
+        }
+        // 游戏结束
+        if(this.state==='gameover'){
+            ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,w,h);
+            ctx.fillStyle='#ff4444';ctx.font='bold 28px sans-serif';ctx.textAlign='center';
+            ctx.fillText('战斗失败',w/2,h/2-30);
+            ctx.fillStyle='#fff';ctx.font='16px sans-serif';
+            ctx.fillText(this.gameOverCause,w/2,h/2+10);
+            ctx.fillStyle='#ffcc00';ctx.font='14px sans-serif';
+            ctx.fillText('点击重新开始',w/2,h/2+50);
+            ctx.textAlign='start';
+        }
+        if(this.state==='victory'){
+            ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,w,h);
+            ctx.fillStyle='#ffcc00';ctx.font='bold 28px sans-serif';ctx.textAlign='center';
+            ctx.fillText('恭喜通关!',w/2,h/2-20);
+            ctx.fillStyle='#fff';ctx.font='16px sans-serif';
+            ctx.fillText('所有敌人已被击败',w/2,h/2+20);
+            ctx.fillStyle='#ffcc00';ctx.font='14px sans-serif';
+            ctx.fillText('点击返回主菜单',w/2,h/2+60);
             ctx.textAlign='start';
         }
     }
-    updateHUD() {
-        const h=this.hero;
-        document.getElementById('hudWave').textContent=this.currentWave+'/'+CFG.MAX_WAVES;
-        document.getElementById('hudKills').textContent=this.kills;
-        document.getElementById('hudGold').textContent=this.goldEarned;
-        document.getElementById('hudLevel').textContent=h.level;
-        const xpR=h.xp/h.getXpToNext();
-        document.getElementById('hudXpFill').style.width=(xpR*100)+'%';
-        const maxHp=h.getMaxHp();
-        const hpR=h.hp/maxHp;
-        document.getElementById('hudHpFill').style.width=(hpR*100)+'%';
-        document.getElementById('hudHpText').textContent=Math.ceil(h.hp)+'/'+maxHp;
-        // 村落血量
-        document.getElementById('hudVillageHp').textContent=Math.ceil(this.village.hp)+'/'+this.village.maxHp;
-        document.getElementById('hudVillageFill').style.width=(this.village.hp/this.village.maxHp*100)+'%';
+    drawButtons(ctx){
+        const ba=this.btnAreas;
+        // 攻击按钮
+        ctx.fillStyle='rgba(255,80,60,0.3)';ctx.strokeStyle='rgba(255,80,60,0.6)';ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(ba.attack.x,ba.attack.y,ba.attack.r,0,Math.PI*2);ctx.fill();ctx.stroke();
+        ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+        ctx.fillText('攻击',ba.attack.x,ba.attack.y+5);
+        // 跳跃按钮
+        ctx.fillStyle='rgba(80,180,255,0.3)';ctx.strokeStyle='rgba(80,180,255,0.6)';
+        ctx.beginPath();ctx.arc(ba.jump.x,ba.jump.y,ba.jump.r,0,Math.PI*2);ctx.fill();ctx.stroke();
+        ctx.fillStyle='#fff';ctx.fillText('跳跃',ba.jump.x,ba.jump.y+5);
+        // 技能按钮
+        ctx.fillStyle='rgba(255,180,60,0.3)';ctx.strokeStyle='rgba(255,180,60,0.6)';
+        ctx.beginPath();ctx.arc(ba.skill.x,ba.skill.y,ba.skill.r,0,Math.PI*2);ctx.fill();ctx.stroke();
+        ctx.fillStyle='#fff';ctx.fillText('技能',ba.skill.x,ba.skill.y+5);
         // 技能冷却
-        const cd1=h.skillCooldowns.fire;
-        const cd2=h.skillCooldowns.ice;
-        document.getElementById('skillCd1').textContent=cd1>0?Math.ceil(cd1)+'s':'';
-        document.getElementById('skillCd2').textContent=cd2>0?Math.ceil(cd2)+'s':'';
-        document.getElementById('btnSkill1').classList.toggle('on-cd', cd1>0);
-        document.getElementById('btnSkill2').classList.toggle('on-cd', cd2>0);
+        if(this.player.skillTimer>0){
+            const cdR=this.player.skillTimer/CFG.PLAYER.skillCooldown;
+            ctx.fillStyle='rgba(0,0,0,0.5)';
+            ctx.beginPath();ctx.arc(ba.skill.x,ba.skill.y,ba.skill.r,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';
+            ctx.fillText(Math.ceil(this.player.skillTimer)+'s',ba.skill.x,ba.skill.y+5);
+        }
+        ctx.textAlign='start';
     }
-    showWaveTransition() {
-        if(!document.getElementById('levelUpScreen').classList.contains('hidden')) {
-            this._pendingWave=true;
+    drawPlayerHUD(ctx){
+        const px=15,py=15;
+        // 名字
+        ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';
+        ctx.fillText('火柴人战士',px,py+12);
+        // 血条
+        const bw=120,bh=10;
+        ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(px,py+20,bw,bh);
+        const hpR=this.player.hp/this.player.maxHp;
+        const hpGrad=ctx.createLinearGradient(px,0,px+bw,0);
+        hpGrad.addColorStop(0,'#ff3333');hpGrad.addColorStop(0.5,'#ff8833');hpGrad.addColorStop(1,'#44cc44');
+        ctx.fillStyle=hpGrad;ctx.fillRect(px,py+20,bw*hpR,bh);
+        ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';
+        ctx.fillText(Math.ceil(this.player.hp)+'/'+this.player.maxHp,px+bw/2-15,py+29);
+    }
+    drawWeaponInfo(ctx){
+        const wcfg=this.player.getWeaponCfg();
+        ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
+        ctx.fillText('武器: '+wcfg.name,this.gameW-15,this.gameH-140);
+        ctx.textAlign='start';
+    }
+    alphaColor(hex,alpha){
+        const r=parseInt(hex.slice(1,3),16);
+        const g=parseInt(hex.slice(3,5),16);
+        const b=parseInt(hex.slice(5,7),16);
+        return 'rgba('+r+','+g+','+b+','+alpha+')';
+    }
+    drawHills(ctx,parallax){
+        const offset=this.camX*parallax;
+        ctx.beginPath();ctx.moveTo(0,this.groundY);
+        for(let i=0;i<this.gameW+100;i+=80){
+            const h=20+Math.sin(i*0.02+offset*0.005)*30;
+            ctx.lineTo(i,this.groundY-h);
+        }
+        ctx.lineTo(this.gameW,this.groundY);ctx.closePath();ctx.fill();
+    }
+    handleClick(gx,gy){
+        if(this.state==='gameover'){
+            this.restart();
             return;
         }
-        this._pendingWave=false;
-        this.paused=true;
-        this.currentWave++;
-        const data=getWaveData(this.currentWave);
-        this.waveEnemies=[];
-        // 随机打乱
-        const shuffled=[...data.enemies].sort(()=>Math.random()-0.5);
-        for(const e of shuffled) {
-            this.waveEnemies.push({...e});
+        if(this.state==='victory'){
+            this.goToMenu();
+            return;
         }
-        this.waveSpawnTimer=0.3;
-        this.waveSpawnInterval=Math.max(0.2, 0.5-(this.currentWave-1)*0.015);
-        document.getElementById('waveNum').textContent=this.currentWave;
-        const preview=document.getElementById('wavePreview');
-        preview.innerHTML='';
-        for(const e of data.enemies) {
-            const tag=document.createElement('span');
-            tag.className='enemy-tag';
-            tag.textContent=CFG.ENEMY_TYPES[e.type].name+' x'+e.count;
-            preview.appendChild(tag);
-        }
-        document.getElementById('waveScreen').classList.remove('hidden');
     }
-    startWave() {
-        document.getElementById('waveScreen').classList.add('hidden');
-        this.waveActive=true;
-        this.paused=false;
+    restart(){
+        this.sceneIdx=DB.data.scene-1;
+        this.sceneCfg=CFG.SCENES[this.sceneIdx];
+        this.worldW=this.sceneCfg.width;
+        this.player.hp=this.player.maxHp;
+        this.state='playing';
+        this.gameOverCause='';
+        this.victoryScene=false;
+        this.initScene();
     }
-    addXP(xp) {
-        this.hero.addXP(xp);
+    goToMenu(){
+        this.running=false;
+        document.getElementById('gameScreen').classList.add('hidden');
+        document.getElementById('mainMenu').classList.remove('hidden');
+        updateMenuDisplay();
     }
-    showLevelUp() {
-        this.paused=true;
-        const options=this.generateLevelUpOptions();
-        const container=document.getElementById('levelUpOptions');
-        container.innerHTML='';
-        options.forEach(opt=>{
+}
+
+// ==================== 菜单 ====================
+function updateMenuDisplay(){
+    document.getElementById('menuMaxScene').textContent=DB.data.maxScene;
+    document.getElementById('menuWeapon').textContent=CFG.WEAPONS[DB.data.weapon]?.name||'剑';
+    // 武器选择
+    const wg=document.getElementById('weaponGrid');
+    if(wg){
+        wg.innerHTML='';
+        for(const k in CFG.WEAPONS){
+            const wcfg=CFG.WEAPONS[k];
             const div=document.createElement('div');
-            div.className='level-option';
-            div.innerHTML='<div class="lo-name">'+opt.name+'</div><div class="lo-desc">'+opt.desc+'</div>';
+            div.className='weapon-btn'+(DB.data.weapon===k?' selected':'');
+            div.textContent=wcfg.name;
             div.onclick=()=>{
-                this.hero.applyUpgrade(opt);
-                document.getElementById('levelUpScreen').classList.add('hidden');
-                if(this._pendingWave) {
-                    this._pendingWave=false;
-                    this.showWaveTransition();
-                } else {
-                    this.paused=false;
-                }
+                DB.data.weapon=k;DB.save();
+                updateMenuDisplay();
             };
-            container.appendChild(div);
-        });
-        document.getElementById('levelUpScreen').classList.remove('hidden');
-    }
-    generateLevelUpOptions() {
-        const options=[];
-        const pool=[...CFG.LEVEL_OPTIONS];
-        const used=new Set();
-        for(let i=0;i<4;i++) {
-            const available=pool.filter(o=>!used.has(o.id));
-            if(available.length===0) break;
-            const total=available.reduce((a,b)=>a+b.weight,0);
-            let r=Math.random()*total;
-            for(const o of available) { r-=o.weight; if(r<=0) { options.push({...o}); used.add(o.id); break; } }
-        }
-        return options;
-    }
-    useSkill(type) {
-        const h=this.hero;
-        if(h.dead||h.skillCooldowns[type]>0) return;
-        const cfg=CFG.SKILLS[type];
-        const dmgMul=h.getSkillDmgMul();
-        h.skillCooldowns[type]=h.getSkillCd(type);
-        if(type==='fire') {
-            const count=cfg.fireballs+Math.floor(h.bonusSkillDmg*5);
-            for(let i=0;i<count;i++) {
-                this.fireballs.push(new Fireball(
-                    rand(20,this.gameW-20), -rand(20,80),
-                    Math.floor(cfg.damage*dmgMul), this.gameH
-                ));
-            }
-        } else if(type==='ice') {
-            const count=cfg.swords+Math.floor(h.bonusSkillDmg*3);
-            const spreadAngle=Math.PI*0.7;
-            const startAngle=-Math.PI/2-spreadAngle/2;
-            for(let i=0;i<count;i++) {
-                const a=startAngle+(i/(Math.max(1,count-1)))*spreadAngle;
-                const spd=rand(3.5,5.5);
-                this.iceSwords.push(new IceSword(h.x, h.y, Math.cos(a)*spd, Math.sin(a)*spd, Math.floor(cfg.damage*dmgMul)));
-            }
+            wg.appendChild(div);
         }
     }
-    togglePause() {
-        if(this.gameOver||this.victory) return;
-        this.paused=!this.paused;
-        document.getElementById('pauseScreen').classList.toggle('hidden', !this.paused);
-    }
-    onGameOver() {
-        this.running=false;
-        this.paused=true;
-        DB.addGold(this.goldEarned);
-        if(this.currentWave>DB.data.highWave) { DB.data.highWave=this.currentWave; DB.save(); }
-        DB.data.totalKills+=this.kills; DB.save();
-        document.getElementById('goWave').textContent=this.currentWave;
-        document.getElementById('goKills').textContent=this.kills;
-        document.getElementById('goGold').textContent=this.goldEarned;
-        document.getElementById('goVillage').textContent=this.village.hp<=0?'村落被摧毁':'英雄阵亡';
-        document.getElementById('gameOverScreen').classList.remove('hidden');
-    }
-    onVictory() {
-        this.running=false;
-        this.paused=true;
-        DB.addGold(this.goldEarned);
-        DB.data.totalKills+=this.kills; DB.save();
-        if(this.currentWave>DB.data.highWave) { DB.data.highWave=this.currentWave; DB.save(); }
-        document.getElementById('vicGold').textContent=this.goldEarned;
-        document.getElementById('victoryScreen').classList.remove('hidden');
-    }
-    quitGame() {
-        this.running=false;
-        location.reload();
-    }
-    restartGame() {
-        this.running=false;
-        document.getElementById('gameOverScreen').classList.add('hidden');
-        document.getElementById('gameScreen').classList.remove('hidden');
-        new Game(this.stageCfg.id);
-    }
-    // 英雄强化
-    showPermUpgrades() { showPermUpgradesStandalone(); }
-    updateMenuStats() {
-        updateMenuStats();
-    }
-}
-
-// ==================== 独立函数（主菜单可用） ====================
-function updateMenuStats() {
-    document.getElementById('mHighWave').textContent=DB.data.highWave;
-    document.getElementById('mGold').textContent=DB.getGold();
-    document.getElementById('mKills').textContent=DB.data.totalKills;
-}
-
-function showPermUpgradesStandalone() {
-    try {
-        const container=document.getElementById('upgradeList');
-        if(!container) return;
-        container.innerHTML='';
-        const keys=Object.keys(CFG.PERM_UPGRADES);
-        for(let i=0;i<keys.length;i++) {
-            const k=keys[i];
-            const cfg=CFG.PERM_UPGRADES[k];
-            const lv=DB.getPermLv(k);
-            const cost=DB.getPermCost(k);
-            const maxed=lv>=cfg.maxLv;
+    // 场景选择
+    const sg=document.getElementById('sceneGrid');
+    if(sg){
+        sg.innerHTML='';
+        for(let i=0;i<CFG.SCENES.length;i++){
+            const scene=CFG.SCENES[i];
+            const locked=i>=DB.data.maxScene;
             const div=document.createElement('div');
-            div.className='upgrade-item';
-            // 左: 名称+等级
-            const left=document.createElement('div');
-            left.style.cssText='text-align:left;flex:1;';
-            left.innerHTML='<div class="up-name">'+cfg.name+' <span style="color:#999;font-size:10px;">Lv.'+lv+'/'+cfg.maxLv+'</span></div><div class="up-desc">'+cfg.desc+'</div>';
-            div.appendChild(left);
-            // 右: 按钮或状态
-            const right=document.createElement('div');
-            if(maxed) {
-                right.className='up-cost';
-                right.textContent='已满级';
-                right.style.color='#666';
-            } else {
-                right.className='up-cost';
-                right.textContent=cost+' 金币';
-                right.style.cssText='color:#ffcc00;font-size:11px;font-weight:bold;cursor:pointer;';
-                div.style.cursor='pointer';
-                const kk=k;
-                div.addEventListener('click',function(){
-                    if(DB.upgradePerm(kk)) {
-                        right.textContent='已升级!';
-                        right.style.color='#4a4';
-                        div.style.cursor='default';
-                        div.style.pointerEvents='none';
-                        setTimeout(()=>showPermUpgradesStandalone(), 400);
-                    } else {
-                        right.textContent='金币不足';
-                        right.style.color='#f66';
-                        setTimeout(()=>{
-                            right.textContent=cost+' 金币';
-                            right.style.color='#ffcc00';
-                        }, 800);
-                    }
-                });
+            div.className='scene-btn'+(locked?' locked':'');
+            div.innerHTML='<span class="sc-num">'+(i+1)+'</span><span class="sc-name">'+(scene.boss?'BOSS':scene.name)+'</span>';
+            if(!locked){
+                div.onclick=()=>{
+                    DB.data.scene=i+1;DB.save();
+                    document.getElementById('mainMenu').classList.add('hidden');
+                    document.getElementById('gameScreen').classList.remove('hidden');
+                    new Game();
+                };
             }
-            div.appendChild(right);
-            container.appendChild(div);
+            sg.appendChild(div);
         }
-        document.getElementById('upgradeGold').textContent='金币: '+DB.getGold();
-        document.getElementById('upgradeScreen').classList.remove('hidden');
-        document.getElementById('btnCloseUpgrade').onclick=()=>{
-            document.getElementById('upgradeScreen').classList.add('hidden');
-            updateMenuStats();
-        };
-    } catch(e) {
-        console.error('showPermUpgradesStandalone error:', e);
     }
 }
-
-// ==================== GM ====================
-const GM = {
-    show() { document.getElementById('gmScreen').classList.remove('hidden'); },
-    hide() {
-        document.getElementById('gmScreen').classList.add('hidden');
-        if(window._game) window._game.updateMenuStats();
-    },
-    setGold() {
-        const val=parseInt(document.getElementById('gmGoldInput').value)||0;
-        DB.data.gold=val; DB.save();
-        if(window._game) window._game.updateMenuStats();
-    },
-    addGold() { DB.data.gold+=99999; DB.save(); if(window._game) window._game.updateMenuStats(); },
-    reset() { if(confirm('确定重置所有数据?')) { DB.resetAll(); if(window._game) window._game.updateMenuStats(); } },
-    maxUpgrades() { DB.maxAll(); if(window._game) window._game.updateMenuStats(); },
-};
 
 // ==================== 启动 ====================
-document.addEventListener('DOMContentLoaded', ()=>{
+let _game=null;
+function startGame(){
+    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('gameScreen').classList.remove('hidden');
+    _game=new Game();
+}
+window.startGame=startGame;
+
+document.addEventListener('DOMContentLoaded',()=>{
     DB.init();
-    Input.init();
-    // 主菜单
-    document.getElementById('mHighWave').textContent=DB.data.highWave;
-    document.getElementById('mGold').textContent=DB.getGold();
-    document.getElementById('mKills').textContent=DB.data.totalKills;
-    // 英雄强化按钮（主菜单）
-    document.getElementById('btnUpgrade').onclick=()=>showPermUpgradesStandalone();
-    // 关卡按钮
-    const stageGrid=document.getElementById('stageGrid');
-    CFG.STAGES.forEach(stage=>{
-        const div=document.createElement('div');
-        div.className='stage-btn'+(DB.data.unlockedStages.includes(stage.id)?'':' locked');
-        div.innerHTML='<span class="st-num">'+stage.id+'</span><span class="st-name">'+stage.name+'</span>';
-        div.onclick=()=>{
-            if(!DB.data.unlockedStages.includes(stage.id)) return;
-            document.getElementById('mainMenu').classList.add('hidden');
-            document.getElementById('gameScreen').classList.remove('hidden');
-            new Game(stage.id);
-        };
-        stageGrid.appendChild(div);
-    });
-    // GM
-    document.getElementById('btnGM').onclick=()=>GM.show();
-    document.getElementById('btnCloseGM').onclick=()=>GM.hide();
-    document.getElementById('btnGMSet').onclick=()=>GM.setGold();
-    document.getElementById('btnGMAdd').onclick=()=>GM.addGold();
-    document.getElementById('btnGMReset').onclick=()=>GM.reset();
-    document.getElementById('btnGMMax').onclick=()=>GM.maxUpgrades();
-    // 加载
+    updateMenuDisplay();
+    // 加载资源
     Assets.loadAll().then(()=>{
-        document.getElementById('loadOverlay').classList.add('load-done');
-        setTimeout(()=>{
-            const el=document.getElementById('loadOverlay');
-            if(el) el.style.display='none';
-        }, 600);
+        const el=document.getElementById('loadOverlay');
+        if(el){el.classList.add('load-done');setTimeout(()=>{if(el)el.style.display='none';},600);}
     });
 });
 
