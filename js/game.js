@@ -303,7 +303,7 @@ class Enemy {
         game.addXP(this.xp);
     }
     draw(ctx) {
-        const drawSize=this.size*4.5;
+        const drawSize=this.size*3.0;
         if (this.sprite) {
             ctx.save();
             if(this.hitFlash>0) ctx.globalAlpha=0.5;
@@ -330,7 +330,7 @@ class Enemy {
         ctx.fillStyle=this.freezeTimer>0?'#88ccff':(hpR>0.3?'#4a4':'#c44');
         ctx.fillRect(this.x-bw/2,by,bw*hpR,bh);
     }
-    hasReachedBottom(gameH) { return this.y > gameH - 80; }
+    hasReachedBottom(gameH) { return this.y > gameH - 30; }
 }
 
 // ==================== 技能特效 ====================
@@ -515,7 +515,7 @@ class Village {
         this.hitFlash=Math.max(0, this.hitFlash-dt);
     }
     draw(ctx) {
-        const w=180, h=100;
+        const w=260, h=130;
         if(this.sprite) {
             ctx.save();
             if(this.hitFlash>0) {
@@ -526,15 +526,17 @@ class Village {
         } else {
             // Fallback
             ctx.fillStyle='#8B7355';
-            ctx.fillRect(this.x-70, this.y-40, 140, 80);
+            ctx.fillRect(this.x-100, this.y-55, 200, 110);
             ctx.fillStyle='#654321';
-            ctx.fillRect(this.x-25, this.y-20, 50, 60);
+            ctx.fillRect(this.x-30, this.y-25, 60, 60);
             ctx.fillStyle='#DAA520';
-            ctx.fillRect(this.x-30, this.y-25, 60, 5);
+            ctx.fillRect(this.x-35, this.y-30, 70, 6);
+            ctx.fillStyle='rgba(0,0,0,0.3)';
+            ctx.fillRect(this.x-100, this.y-55, 200, 110);
         }
         // 村落血条
         const hpR=this.hp/this.maxHp;
-        const bw=140, bh=8, by=this.y-58;
+        const bw=160, bh=8, by=this.y-72;
         ctx.fillStyle='rgba(0,0,0,0.7)';
         ctx.fillRect(this.x-bw/2, by, bw, bh);
         const hpGrad=ctx.createLinearGradient(this.x-bw/2,0,this.x+bw/2,0);
@@ -551,7 +553,7 @@ class Village {
 class Hero {
     constructor(gameW, gameH) {
         this.size=30;
-        this.x=240; this.y=gameH-85;
+        this.x=240; this.y=gameH-140;
         this.maxHp=CFG.HERO.baseHp; this.hp=this.maxHp; this.atk=CFG.HERO.baseAtk;
         this.atkSpd=CFG.HERO.baseAtkSpd; this.spd=CFG.HERO.baseSpd;
         this.level=1; this.xp=0; this.xpToNext=CFG.XP_BASE;
@@ -674,7 +676,7 @@ class Hero {
     draw(ctx) {
         if(this.dead) return;
         if(this.invulnTimer>0&&Math.floor(this.invulnTimer*20)%2===0) return;
-        const drawSize=this.size*6.0;
+        const drawSize=this.size*3.5;
         // 移动时倾斜
         const tilt=this.moveDir*0.15;
         // 空闲时上下浮动
@@ -780,8 +782,16 @@ function getWaveData(waveNum) {
 }
 
 // ==================== 游戏主类 ====================
+let _activeGameId = 0;
+
 class Game {
     constructor(stageId) {
+        // 停止旧游戏实例
+        if(window._game && window._game !== this) {
+            window._game.running = false;
+        }
+        this._gameId = ++_activeGameId;
+        window._game = this;
         this.stageCfg=CFG.STAGES.find(s=>s.id===stageId)||CFG.STAGES[0];
         this.gameW=480; this.gameH=800;
         this.canvas=document.getElementById('gameCanvas');
@@ -817,7 +827,7 @@ class Game {
         this.renderY=(maxH-this.gameH*this.scale)/2;
     }
     setupUI() {
-        document.getElementById('btnUpgrade').onclick=()=>this.showPermUpgrades();
+        // 注意：btnUpgrade 在主菜单已绑定，这里不覆盖
         document.getElementById('btnSkill1').onclick=()=>this.useSkill('fire');
         document.getElementById('btnSkill2').onclick=()=>this.useSkill('ice');
         document.getElementById('btnPause').onclick=()=>this.togglePause();
@@ -828,7 +838,7 @@ class Game {
         document.getElementById('btnVictory').onclick=()=>this.quitGame();
     }
     gameLoop(timestamp) {
-        if(!this.running) return;
+        if(!this.running || this._gameId !== _activeGameId) return;
         const dt=Math.min(0.05, (timestamp-this.lastTime)/1000);
         this.lastTime=timestamp;
         if(!this.paused) this.update(dt);
@@ -975,13 +985,14 @@ class Game {
             ctx.fillRect(0,0,this.gameW,this.gameH);
         }
         // 底部防线
-        ctx.strokeStyle='rgba(255,80,80,0.3)'; ctx.lineWidth=2;
-        ctx.setLineDash([10,5]);
-        ctx.beginPath(); ctx.moveTo(0,this.gameH-20); ctx.lineTo(this.gameW,this.gameH-20); ctx.stroke();
-        ctx.setLineDash([]);
-        // 村落
-        this.village.setPosition(this.gameW/2, this.gameH-50);
+        // 村落（画在背景之上，单位之下）
+        this.village.setPosition(this.gameW/2, this.gameH-65);
         this.village.draw(ctx);
+        // 防线
+        ctx.strokeStyle='rgba(255,80,80,0.2)'; ctx.lineWidth=1;
+        ctx.setLineDash([8,4]);
+        ctx.beginPath(); ctx.moveTo(0,this.gameH-15); ctx.lineTo(this.gameW,this.gameH-15); ctx.stroke();
+        ctx.setLineDash([]);
         // 粒子
         for(const pt of this.particles) pt.draw(ctx);
         // 火球
@@ -1160,37 +1171,11 @@ class Game {
     restartGame() {
         this.running=false;
         document.getElementById('gameOverScreen').classList.add('hidden');
-        window._game = new Game(this.stageCfg.id);
+        document.getElementById('gameScreen').classList.remove('hidden');
+        new Game(this.stageCfg.id);
     }
     // 英雄强化
-    showPermUpgrades() {
-        const container=document.getElementById('upgradeList');
-        container.innerHTML='';
-        for(const k in CFG.PERM_UPGRADES) {
-            const cfg=CFG.PERM_UPGRADES[k];
-            const lv=DB.getPermLv(k);
-            const cost=DB.getPermCost(k);
-            const maxed=lv>=cfg.maxLv;
-            const div=document.createElement('div');
-            div.className='upgrade-item';
-            div.innerHTML='<div class="up-name">'+cfg.name+' Lv.'+lv+'/'+cfg.maxLv+'</div><div class="up-desc">'+cfg.desc+'</div><div class="up-cost">'+ (maxed?'已满级':cost+' 金币')+'</div>';
-            if(!maxed) {
-                div.onclick=()=>{
-                    if(DB.upgradePerm(k)) {
-                        div.querySelector('.up-cost').textContent='已升级!';
-                        setTimeout(()=>this.showPermUpgrades(), 300);
-                    }
-                };
-            }
-            container.appendChild(div);
-        }
-        document.getElementById('upgradeGold').textContent=DB.getGold();
-        document.getElementById('upgradeScreen').classList.remove('hidden');
-        document.getElementById('btnCloseUpgrade').onclick=()=>{
-            document.getElementById('upgradeScreen').classList.add('hidden');
-            this.updateMenuStats();
-        };
-    }
+    showPermUpgrades() { showPermUpgradesStandalone(); }
     updateMenuStats() {
         updateMenuStats();
     }
@@ -1204,32 +1189,65 @@ function updateMenuStats() {
 }
 
 function showPermUpgradesStandalone() {
-    const container=document.getElementById('upgradeList');
-    container.innerHTML='';
-    for(const k in CFG.PERM_UPGRADES) {
-        const cfg=CFG.PERM_UPGRADES[k];
-        const lv=DB.getPermLv(k);
-        const cost=DB.getPermCost(k);
-        const maxed=lv>=cfg.maxLv;
-        const div=document.createElement('div');
-        div.className='upgrade-item';
-        div.innerHTML='<div class="up-name">'+cfg.name+' Lv.'+lv+'/'+cfg.maxLv+'</div><div class="up-desc">'+cfg.desc+'</div><div class="up-cost">'+ (maxed?'已满级':cost+' 金币')+'</div>';
-        if(!maxed) {
-            div.onclick=()=>{
-                if(DB.upgradePerm(k)) {
-                    div.querySelector('.up-cost').textContent='已升级!';
-                    setTimeout(()=>showPermUpgradesStandalone(), 300);
-                }
-            };
+    try {
+        const container=document.getElementById('upgradeList');
+        if(!container) return;
+        container.innerHTML='';
+        const keys=Object.keys(CFG.PERM_UPGRADES);
+        for(let i=0;i<keys.length;i++) {
+            const k=keys[i];
+            const cfg=CFG.PERM_UPGRADES[k];
+            const lv=DB.getPermLv(k);
+            const cost=DB.getPermCost(k);
+            const maxed=lv>=cfg.maxLv;
+            const div=document.createElement('div');
+            div.className='upgrade-item';
+            // 左: 名称+等级
+            const left=document.createElement('div');
+            left.style.cssText='text-align:left;flex:1;';
+            left.innerHTML='<div class="up-name">'+cfg.name+' <span style="color:#999;font-size:10px;">Lv.'+lv+'/'+cfg.maxLv+'</span></div><div class="up-desc">'+cfg.desc+'</div>';
+            div.appendChild(left);
+            // 右: 按钮或状态
+            const right=document.createElement('div');
+            if(maxed) {
+                right.className='up-cost';
+                right.textContent='已满级';
+                right.style.color='#666';
+            } else {
+                right.className='up-cost';
+                right.textContent=cost+' 金币';
+                right.style.cssText='color:#ffcc00;font-size:11px;font-weight:bold;cursor:pointer;';
+                div.style.cursor='pointer';
+                const kk=k;
+                div.addEventListener('click',function(){
+                    if(DB.upgradePerm(kk)) {
+                        right.textContent='已升级!';
+                        right.style.color='#4a4';
+                        div.style.cursor='default';
+                        div.style.pointerEvents='none';
+                        setTimeout(()=>showPermUpgradesStandalone(), 400);
+                    } else {
+                        right.textContent='金币不足';
+                        right.style.color='#f66';
+                        setTimeout(()=>{
+                            right.textContent=cost+' 金币';
+                            right.style.color='#ffcc00';
+                        }, 800);
+                    }
+                });
+            }
+            div.appendChild(right);
+            container.appendChild(div);
         }
-        container.appendChild(div);
+        document.getElementById('upgradeGold').textContent='金币: '+DB.getGold();
+        document.getElementById('upgradeScreen').classList.remove('hidden');
+        document.getElementById('btnCloseUpgrade').onclick=()=>{
+            document.getElementById('upgradeScreen').classList.add('hidden');
+            updateMenuStats();
+        };
+    } catch(e) {
+        console.error('showPermUpgradesStandalone error:', e);
     }
-    document.getElementById('upgradeGold').textContent=DB.getGold();
-    document.getElementById('upgradeScreen').classList.remove('hidden');
-    document.getElementById('btnCloseUpgrade').onclick=()=>{
-        document.getElementById('upgradeScreen').classList.add('hidden');
-        updateMenuStats();
-    };
 }
 
 // ==================== GM ====================
@@ -1269,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(!DB.data.unlockedStages.includes(stage.id)) return;
             document.getElementById('mainMenu').classList.add('hidden');
             document.getElementById('gameScreen').classList.remove('hidden');
-            window._game = new Game(stage.id);
+            new Game(stage.id);
         };
         stageGrid.appendChild(div);
     });
