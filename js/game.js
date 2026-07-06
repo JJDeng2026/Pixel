@@ -1,60 +1,26 @@
 /**
  * ============================================
- * 亡灵骑士·夏侯惇 - 游戏引擎 v3.0
- * 绿幕抠图渲染 | 无缝背景 | 纯文字UI
+ * 亡灵骑士·夏侯惇 - 游戏引擎 v4.0
+ * 45°上帝视角 | 亮色主题 | 视野内攻击 | 升级弹道
  * ============================================
  */
 (function(){
 'use strict';
 
-// ==================== 绿幕抠图工具 ====================
+// ==================== 绿幕抠图 ====================
 const ChromaKey = {
-    // 缓存已处理的无背景图
     cache: {},
-    // 绿幕颜色范围 (带容差)
-    keyR: {min:0, max:80},   // 绿色通道远大于红蓝即为绿幕
-    tolerance: 100,
-
-    /** 从Image创建无背景的Canvas */
-    process(img, key) {
-        if (this.cache[key]) return this.cache[key];
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const data = ctx.getImageData(0, 0, c.width, c.height);
-        const pixels = data.data;
-        for (let i = 0; i < pixels.length; i += 4) {
-            const r = pixels[i];
-            const g = pixels[i + 1];
-            const b = pixels[i + 2];
-            // 检测绿幕: 绿色分量明显高于红蓝，且绿色足够亮
-            if (g > 100 && g > r * 1.4 && g > b * 1.2) {
-                pixels[i + 3] = 0; // 设为透明
-            }
-        }
-        ctx.putImageData(data, 0, 0);
-        this.cache[key] = c;
-        return c;
-    },
-
-    /** 带边缘柔化的处理 */
     processSoft(img, key) {
         if (this.cache[key + '_soft']) return this.cache[key + '_soft'];
         const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
+        c.width = img.width; c.height = img.height;
         const ctx = c.getContext('2d');
         ctx.drawImage(img, 0, 0);
         const data = ctx.getImageData(0, 0, c.width, c.height);
         const pixels = data.data;
         for (let i = 0; i < pixels.length; i += 4) {
-            const r = pixels[i];
-            const g = pixels[i + 1];
-            const b = pixels[i + 2];
+            const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
             if (g > 80 && g > r * 1.3 && g > b * 1.1) {
-                // 计算绿色程度，用于边缘柔化
                 const greenness = Math.min(1, (g - Math.max(r, b)) / 100);
                 pixels[i + 3] = Math.round(255 * (1 - greenness));
             }
@@ -63,33 +29,28 @@ const ChromaKey = {
         this.cache[key + '_soft'] = c;
         return c;
     },
-
     clear() { this.cache = {}; }
 };
 
-// ==================== 图片资源路径 ====================
+// ==================== 图片资源 ====================
 const IMG = {
     player: 'assets/images/ai_player_sprite.jpg',
     enemies: {
-        wraith:   'assets/images/ai_enemy_wraith.jpg',
+        wraith: 'assets/images/ai_enemy_wraith.jpg',
         skeleton: 'assets/images/ai_enemy_skeleton.jpg',
-        zombie:   'assets/images/ai_enemy_zombie.jpg',
-        demon:    'assets/images/ai_enemy_demon.jpg',
-        boss:     'assets/images/ai_enemy_boss.jpg',
+        zombie: 'assets/images/ai_enemy_zombie.jpg',
+        demon: 'assets/images/ai_enemy_demon.jpg',
+        boss: 'assets/images/ai_enemy_boss.jpg',
     },
     bgTile: 'assets/images/ai_bg_tile.jpg',
     itemBomb: 'assets/images/ai_item_bomb.jpg',
-    itemPower:'assets/images/ai_item_power.jpg',
+    itemPower: 'assets/images/ai_item_power.jpg',
     itemHeal: 'assets/images/ai_item_heal.jpg',
 };
 
 // ==================== 性能上限 ====================
 const LIMITS = {
-    ENEMIES: 200,
-    PARTICLES: 300,
-    PICKUPS: 120,
-    PROJECTILES: 300,
-    SKILL_EFFECTS: 10,
+    ENEMIES: 200, PARTICLES: 300, PICKUPS: 120, PROJECTILES: 400, SKILL_EFFECTS: 10,
 };
 
 // ==================== 配置 ====================
@@ -104,6 +65,8 @@ const CFG = {
     ENEMY_WANDER_SPEED: 0.4,
     ENEMY_STUN_TIME: 3,
     ITEM_DROP_CHANCE: 0.08,
+    // 攻击范围：仅视野内（屏幕范围+边距）
+    ATTACK_RANGE_MARGIN: 60,
     ITEM_TYPES: {
         bomb: { name:'暗影炸弹', desc:'全屏爆炸伤害', img:IMG.itemBomb, skill:'bomb', cooldown:8 },
         power:{ name:'黑暗能量', desc:'全屏暗影爆发', img:IMG.itemPower, skill:'ult', cooldown:10 },
@@ -133,24 +96,24 @@ const CFG = {
         magnet:{ name:'磁铁强化', desc:'+15% 拾取范围',baseCost:100, costMul:1.3, maxLv:10 },
     },
     LEVEL_OPTIONS: [
-        { type:'stat', id:'maxHp',    name:'生命强化',   desc:'+15 最大生命值',  weight:15 },
-        { type:'stat', id:'maxHp2',   name:'生命强化+',  desc:'+25 最大生命值',  weight:8 },
-        { type:'stat', id:'damage',   name:'攻击强化',   desc:'+3 基础伤害',     weight:15 },
-        { type:'stat', id:'damage2',  name:'攻击强化+',  desc:'+6 基础伤害',     weight:8 },
-        { type:'stat', id:'speed',    name:'速度提升',   desc:'+0.25 移动速度',  weight:12 },
-        { type:'stat', id:'atkSpd',   name:'攻速提升',   desc:'+10% 攻击速度',   weight:12 },
-        { type:'stat', id:'armor',    name:'护甲提升',   desc:'+1 伤害减免',     weight:10 },
-        { type:'stat', id:'magnet',   name:'磁铁范围',   desc:'+20% 拾取范围',   weight:8 },
-        { type:'stat', id:'heal',     name:'即时治疗',   desc:'恢复35%最大生命',  weight:10 },
-        { type:'weapon', id:'newWeapon', name:'新武器',  desc:'获得一件新武器',   weight:8 },
-        { type:'weapon', id:'upgradeWeapon', name:'武器升级', desc:'随机武器升1级',weight:10 },
+        { type:'stat', id:'maxHp',    name:'生命强化',   desc:'+15 最大生命值',  weight:13 },
+        { type:'stat', id:'maxHp2',   name:'生命强化+',  desc:'+25 最大生命值',  weight:7 },
+        { type:'stat', id:'damage',   name:'攻击强化',   desc:'+3 基础伤害',     weight:13 },
+        { type:'stat', id:'damage2',  name:'攻击强化+',  desc:'+6 基础伤害',     weight:7 },
+        { type:'stat', id:'speed',    name:'速度提升',   desc:'+0.25 移动速度',  weight:10 },
+        { type:'stat', id:'atkSpd',   name:'攻速提升',   desc:'+10% 攻击速度',   weight:10 },
+        { type:'stat', id:'armor',    name:'护甲提升',   desc:'+1 伤害减免',     weight:8 },
+        { type:'stat', id:'magnet',   name:'磁铁范围',   desc:'+20% 拾取范围',   weight:6 },
+        { type:'stat', id:'heal',     name:'即时治疗',   desc:'恢复35%最大生命',  weight:8 },
+        { type:'stat', id:'projectile', name:'弹道增加', desc:'+1 额外弹道数',    weight:10 },
+        { type:'weapon', id:'newWeapon', name:'新武器',  desc:'获得一件新武器',   weight:6 },
+        { type:'weapon', id:'upgradeWeapon', name:'武器升级', desc:'随机武器升1级',weight:8 },
     ],
 };
 
 // ==================== 图片加载器 ====================
 const Assets = {
-    loaded: {},
-    total: 0, count: 0,
+    loaded: {}, total: 0, count: 0,
     loadAll() {
         const urls = [];
         urls.push({key:'player', url:IMG.player});
@@ -167,7 +130,6 @@ const Assets = {
             const img = new Image();
             img.onload = ()=>{
                 this.loaded[key]=img;
-                // 预生成绿幕抠图版本
                 if (key === 'player' || key.startsWith('enemy_') || key.startsWith('item')) {
                     ChromaKey.processSoft(img, key);
                 }
@@ -283,7 +245,7 @@ class Projectile {
     }
 }
 
-// ==================== 敌人 (绿幕抠图渲染 + 优化AI) ====================
+// ==================== 敌人 ====================
 class Enemy {
     constructor(type, x, y, difficulty=1) {
         const cfg = CFG.ENEMY_TYPES[type];
@@ -372,21 +334,17 @@ class Enemy {
         const sx=this.x-cam.x, sy=this.y-cam.y;
         const floatY=Math.sin(Date.now()/300+this.anim)*2;
         const drawSize=this.size*2.5;
-        const dx=sx-drawSize/2, dy=sy-drawSize/2+floatY;
         if (this.sprite) {
             ctx.save();
             ctx.translate(sx, sy+floatY);
-            // 敌人面朝玩家方向
             if (player) {
                 const enemyAngle = Math.atan2(player.y - this.y, player.x - this.x);
                 ctx.rotate(enemyAngle - Math.PI/2);
             }
-            // 保持宽高比不变形
             const eAspect = this.sprite.width / this.sprite.height;
             let edw = drawSize, edh = drawSize;
             if (eAspect > 1) edh = drawSize / eAspect;
             else edw = drawSize * eAspect;
-            // 绿幕抠图后的精灵渲染
             if (this.hitFlash>0) {
                 ctx.globalAlpha = 0.5;
                 ctx.drawImage(this.sprite, -edw/2, -edh/2, edw, edh);
@@ -396,7 +354,6 @@ class Enemy {
             }
             ctx.restore();
         } else {
-            // 回退几何绘制
             const color=this.hitFlash>0?'#fff':this.color;
             ctx.fillStyle=color;
             ctx.beginPath();
@@ -420,12 +377,10 @@ class Enemy {
             ctx.fillText('\u7729\u6655 '+this.stunTimer.toFixed(1)+'s', sx, sy-drawSize/2-8);
             ctx.textAlign='start';
         }
-        // 减速效果
         if(this.slowTimer>0) {
             ctx.strokeStyle='rgba(100,200,255,0.6)'; ctx.lineWidth=2;
             ctx.beginPath(); ctx.arc(sx,sy+floatY,this.size/2+6,0,Math.PI*2); ctx.stroke();
         }
-        // HP条
         const hpR=this.hp/this.maxHp;
         const bw=this.size*1.2; const bh=3; const by=sy-this.size/2-12;
         ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(sx-bw/2,by,bw,bh);
@@ -571,18 +526,24 @@ class WeaponSystem {
             }
         }
     }
+    // 获取额外弹道数
+    getExtraProjectiles(player) {
+        return player ? player.bonusProjectiles : 0;
+    }
     updateSoulBlade(dt, player, game, w, lv) {
         if(!w.cooldown) w.cooldown=0; w.cooldown-=dt;
         const cd=Math.max(0.3,1.2-lv*0.1);
         if(w.cooldown<=0) {
             w.cooldown=cd;
-            const nearest=game.getNearestEnemy(player.x,player.y);
+            const nearest=game.getNearestEnemyInViewport(player);
             if(!nearest) return;
             const a=angle(player,nearest);
             const arcCount=lv>=5?5:lv>=3?3:1;
             const spread=lv>=4?0.5:0.3;
-            for(let i=0;i<arcCount;i++) {
-                const aa=a+(i-Math.floor(arcCount/2))*spread;
+            const extra = this.getExtraProjectiles(player);
+            const total = arcCount + extra;
+            for(let i=0;i<total;i++) {
+                const aa=a+(i-Math.floor(total/2))*spread;
                 const proj=new Projectile(
                     player.x+Math.cos(aa)*player.size,player.y+Math.sin(aa)*player.size,
                     Math.cos(aa)*10,Math.sin(aa)*10,player.getDamage()*(0.8+lv*0.3),16+lv*2,'#c8a84e',lv>=6?4:lv>=4?2:1
@@ -596,7 +557,9 @@ class WeaponSystem {
         const cd=Math.max(0.3,0.9-lv*0.08);
         if(w.cooldown<=0) {
             w.cooldown=cd;
-            const count=lv>=5?6:lv>=3?4:2;
+            const baseCount=lv>=5?6:lv>=3?4:2;
+            const extra = this.getExtraProjectiles(player);
+            const count = baseCount + extra;
             const baseAngle=Date.now()/1000*(lv>=4?2:1);
             for(let i=0;i<count;i++) {
                 const a=baseAngle+(i/count)*Math.PI*2;
@@ -609,7 +572,10 @@ class WeaponSystem {
         if(w.timer<=0) {
             w.timer=0.15;
             const radius=60+lv*12;
-            game.enemies.forEach(e=>{if(dist(e,player)<radius) e.takeDamage(player.getDamage()*(0.3+lv*0.1)*dt*60,game);});
+            game.enemies.forEach(e=>{
+                if(!game.isInViewport(e)) return;
+                if(dist(e,player)<radius) e.takeDamage(player.getDamage()*(0.3+lv*0.1)*dt*60,game);
+            });
         }
         w.visualAngle=(w.visualAngle||0)+dt*2;
         for(let i=0;i<3+lv;i++) {
@@ -623,7 +589,9 @@ class WeaponSystem {
         const cd=Math.max(0.5,2.5-lv*0.3);
         if(w.cooldown<=0) {
             w.cooldown=cd;
-            const count=lv>=5?5:lv>=3?3:2;
+            const baseCount=lv>=5?5:lv>=3?3:2;
+            const extra = this.getExtraProjectiles(player);
+            const count = baseCount + extra;
             for(let i=0;i<count;i++) {
                 const tx=player.x+rand(-200,200),ty=player.y+rand(-200,200);
                 const radius=30+lv*8;
@@ -638,7 +606,9 @@ class WeaponSystem {
         const cd=Math.max(0.3,1.5-lv*0.15);
         if(w.cooldown<=0) {
             w.cooldown=cd;
-            const chainCount=lv>=5?6:lv>=3?4:2;
+            const baseCount=lv>=5?6:lv>=3?4:2;
+            const extra = this.getExtraProjectiles(player);
+            const chainCount = baseCount + extra;
             let last=player; const hit=new Set();
             for(let c=0;c<chainCount;c++) {
                 let nearest=null,minD=250;
@@ -681,6 +651,7 @@ class Player {
         this.dead=false; this.invulnTimer=3; this.contactDmgTimer=0;
         this.bonusHp=0; this.bonusDmg=0; this.bonusSpd=0; this.bonusAtkSpd=0;
         this.bonusArmor=0; this.bonusMagnet=0;
+        this.bonusProjectiles=0;
         this.weapons=new WeaponSystem(); this.weapons.addWeapon('soulBlade');
         this.facingDir=0; this.moveX=0; this.moveY=0;
         this.animFrame=0; this.animTimer=0; this.isMoving=false;
@@ -700,9 +671,13 @@ class Player {
         this.moveX=input.x; this.moveY=input.y;
         this.isMoving=input.x!==0||input.y!==0;
         const spd=this.getSpeed();
-        this.x+=input.x*spd*60*dt; this.y+=input.y*spd*60*dt;
+        // 45° 等距移动：将屏幕坐标映射到等距世界坐标
+        // 屏幕右 = 世界右下，屏幕上 = 世界右上，屏幕左 = 世界左上，屏幕下 = 世界左下
+        const isoX = input.x * 0.707 - input.y * 0.707;
+        const isoY = input.x * 0.707 + input.y * 0.707;
+        this.x+=isoX*spd*60*dt; this.y+=isoY*spd*60*dt;
         if(this.isMoving) {
-            this.facingDir=Math.atan2(input.y,input.x);
+            this.facingDir=Math.atan2(isoY, isoX);
             this.animTimer+=dt;
             if(this.animTimer>0.12) { this.animTimer=0; this.animFrame=(this.animFrame+1)%4; }
         } else { this.animFrame=0; }
@@ -738,6 +713,7 @@ class Player {
                     case 'atkSpd': this.bonusAtkSpd+=0.1; break;
                     case 'armor': this.bonusArmor+=1; break;
                     case 'magnet': this.bonusMagnet+=0.2; break;
+                    case 'projectile': this.bonusProjectiles+=1; break;
                     case 'heal': this.hp=Math.min(this.getTotalHp(),this.hp+this.getTotalHp()*0.35); break;
                 } break;
             case 'weapon':
@@ -752,11 +728,9 @@ class Player {
     }
     draw(ctx, cam) {
         const sx=this.x-cam.x, sy=this.y-cam.y;
-        if(this.invulnTimer>0&&Math.floor(this.invulnTimer*30)%2===0) return;
+        // 无闪烁：正常绘制，不被 invulnTimer 影响
         const drawSize=this.size*2.8;
-        const dx=sx-drawSize/2, dy=sy-drawSize/2;
         if (this.sprite) {
-            // 绿幕抠图后的精灵动画 - 保持宽高比不变形
             const frameW = this.sprite.width / 4;
             const srcX = this.animFrame * frameW;
             const frameH = this.sprite.height;
@@ -770,7 +744,6 @@ class Player {
             ctx.drawImage(this.sprite, srcX, 0, frameW, frameH, -dw/2, -dh/2, dw, dh);
             ctx.restore();
         } else {
-            // 回退绘制
             const grad=ctx.createRadialGradient(sx,sy,0,sx,sy,this.size/2);
             grad.addColorStop(0,'#4a6090'); grad.addColorStop(0.6,'#2a3a5a'); grad.addColorStop(1,'#0a0a1a');
             ctx.fillStyle=grad;
@@ -781,9 +754,9 @@ class Player {
             ctx.arc(sx+this.size*0.25,sy-this.size*0.2,3,0,Math.PI*2); ctx.fill();
             ctx.shadowBlur=0;
         }
-        // 无敌光环
+        // 无敌光环（不闪烁，始终显示淡金环）
         if(this.invulnTimer>2) {
-            ctx.strokeStyle='rgba(255,215,0,0.5)'; ctx.lineWidth=2;
+            ctx.strokeStyle='rgba(255,215,0,0.4)'; ctx.lineWidth=2;
             ctx.beginPath(); ctx.arc(sx,sy,this.size/2+6,0,Math.PI*2); ctx.stroke();
         }
     }
@@ -868,6 +841,7 @@ class Game {
         this.itemCooldowns={bomb:0,power:0,heal:0};
         this.skillEffects=[];
         this.bgCache=null;
+        this._itemBarDirty=false;
         window._game=this;
     }
     init() {
@@ -881,11 +855,9 @@ class Game {
     generateBg() {
         const bgImg=Assets.getRaw('bgTile');
         if (!bgImg || !bgImg.complete) {
-            // 回退：纯色背景
             this.bgCache = null;
             return;
         }
-        // 生成无缝平铺背景
         const bgCanvas = document.createElement('canvas');
         bgCanvas.width = CFG.MAP_W;
         bgCanvas.height = CFG.MAP_H;
@@ -896,10 +868,29 @@ class Game {
                 bgCtx.drawImage(bgImg, x, y, tileSize, tileSize);
             }
         }
-        // 暗化覆盖层
-        bgCtx.fillStyle = 'rgba(0,0,0,0.5)';
+        // 亮色半透明覆盖层（替代之前的暗色）
+        bgCtx.fillStyle = 'rgba(255,255,240,0.08)';
         bgCtx.fillRect(0, 0, CFG.MAP_W, CFG.MAP_H);
         this.bgCache = bgCanvas;
+    }
+    // 判断敌人是否在视野内
+    isInViewport(enemy) {
+        const margin = CFG.ATTACK_RANGE_MARGIN;
+        const left = this.cam.x - margin;
+        const right = this.cam.x + this.canvas.width + margin;
+        const top = this.cam.y - margin;
+        const bottom = this.cam.y + this.canvas.height + margin;
+        return enemy.x >= left && enemy.x <= right && enemy.y >= top && enemy.y <= bottom;
+    }
+    // 获取视野内最近的敌人
+    getNearestEnemyInViewport(player) {
+        let nearest=null, minD=Infinity;
+        for(const e of this.enemies) {
+            if(!this.isInViewport(e)) continue;
+            const d=dist(e,player);
+            if(d<minD) { minD=d; nearest=e; }
+        }
+        return nearest;
     }
     start() {
         this.running=true; this.paused=false;
@@ -982,7 +973,7 @@ class Game {
                 }
             }
         }
-        // 敌人生成 - 有上限保护
+        // 敌人生成
         this.enemySpawnTimer-=dt;
         if(this.enemySpawnTimer<=0&&this.enemies.length<LIMITS.ENEMIES) {
             this.spawnWave();
@@ -1002,7 +993,6 @@ class Game {
             this.cam.y+=Math.cos(this.shake*50)*5*this.shake;
         }
         if(p.dead) this.gameOver();
-        // 优化：HUD信息每帧更新（轻量），道具栏仅在变化时重建
         this.updateHUD();
     }
     spawnWave() {
@@ -1129,7 +1119,6 @@ class Game {
             container.appendChild(slot);
         }
     }
-    // 轻量更新：仅更新冷却文字，不重建DOM
     updateItemBarCooldowns() {
         const container=document.getElementById('itemSlots');
         if(!container) return;
@@ -1162,7 +1151,7 @@ class Game {
         if (this.bgCache) {
             ctx.drawImage(this.bgCache, this.cam.x, this.cam.y, this.canvas.width, this.canvas.height, 0, 0, this.canvas.width, this.canvas.height);
         } else {
-            ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+            ctx.fillStyle='#f5f0e0'; ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
         }
         for(const pk of this.pickups) pk.draw(ctx,this.cam);
         for(const e of this.enemies) e.draw(ctx,this.cam,this.player);
@@ -1191,7 +1180,6 @@ class Game {
         const tEl=document.getElementById('hudTime'); if(tEl) tEl.textContent=m+':'+String(s).padStart(2,'0');
         const kEl=document.getElementById('hudKills'); if(kEl) kEl.textContent=this.kills;
         const sEl=document.getElementById('hudScore'); if(sEl) sEl.textContent=Math.floor(this.score);
-        // 优化：道具栏仅在变化时重建，其他时候只更新冷却文字
         if (this._itemBarDirty) {
             this.updateItemBar();
         } else {
