@@ -791,7 +791,7 @@ class Game {
         // 状态
         this.enemies=[]; this.bullets=[]; this.particles=[];
         this.fireballs=[]; this.iceSwords=[];
-        this.running=false; this.paused=false;
+        this.running=true; this.paused=false;
         this.currentWave=0; this.waveEnemies=[]; this.waveActive=false;
         this.waveSpawnTimer=0; this.waveSpawnInterval=0.5;
         this.kills=0; this.score=0; this.goldEarned=0;
@@ -1192,10 +1192,44 @@ class Game {
         };
     }
     updateMenuStats() {
-        document.getElementById('mHighWave').textContent=DB.data.highWave;
-        document.getElementById('mGold').textContent=DB.getGold();
-        document.getElementById('mKills').textContent=DB.data.totalKills;
+        updateMenuStats();
     }
+}
+
+// ==================== 独立函数（主菜单可用） ====================
+function updateMenuStats() {
+    document.getElementById('mHighWave').textContent=DB.data.highWave;
+    document.getElementById('mGold').textContent=DB.getGold();
+    document.getElementById('mKills').textContent=DB.data.totalKills;
+}
+
+function showPermUpgradesStandalone() {
+    const container=document.getElementById('upgradeList');
+    container.innerHTML='';
+    for(const k in CFG.PERM_UPGRADES) {
+        const cfg=CFG.PERM_UPGRADES[k];
+        const lv=DB.getPermLv(k);
+        const cost=DB.getPermCost(k);
+        const maxed=lv>=cfg.maxLv;
+        const div=document.createElement('div');
+        div.className='upgrade-item';
+        div.innerHTML='<div class="up-name">'+cfg.name+' Lv.'+lv+'/'+cfg.maxLv+'</div><div class="up-desc">'+cfg.desc+'</div><div class="up-cost">'+ (maxed?'已满级':cost+' 金币')+'</div>';
+        if(!maxed) {
+            div.onclick=()=>{
+                if(DB.upgradePerm(k)) {
+                    div.querySelector('.up-cost').textContent='已升级!';
+                    setTimeout(()=>showPermUpgradesStandalone(), 300);
+                }
+            };
+        }
+        container.appendChild(div);
+    }
+    document.getElementById('upgradeGold').textContent=DB.getGold();
+    document.getElementById('upgradeScreen').classList.remove('hidden');
+    document.getElementById('btnCloseUpgrade').onclick=()=>{
+        document.getElementById('upgradeScreen').classList.add('hidden');
+        updateMenuStats();
+    };
 }
 
 // ==================== GM ====================
@@ -1223,6 +1257,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     document.getElementById('mHighWave').textContent=DB.data.highWave;
     document.getElementById('mGold').textContent=DB.getGold();
     document.getElementById('mKills').textContent=DB.data.totalKills;
+    // 英雄强化按钮（主菜单）
+    document.getElementById('btnUpgrade').onclick=()=>showPermUpgradesStandalone();
     // 关卡按钮
     const stageGrid=document.getElementById('stageGrid');
     CFG.STAGES.forEach(stage=>{
@@ -1231,8 +1267,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         div.innerHTML='<span class="st-num">'+stage.id+'</span><span class="st-name">'+stage.name+'</span>';
         div.onclick=()=>{
             if(!DB.data.unlockedStages.includes(stage.id)) return;
-            document.getElementById('mainMenu').style.display='none';
-            document.getElementById('gameScreen').style.display='block';
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
             window._game = new Game(stage.id);
         };
         stageGrid.appendChild(div);
