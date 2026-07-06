@@ -55,18 +55,18 @@ const CFG = {
         { id:5, name:'火山', unlocked:true,  enemyHpMul:2.5, enemySpdMul:1.35, goldMul:1.8, bgColor:'#5a1a1a' },
     ],
     ENEMY_TYPES: {
-        slime:    { name:'史莱姆', hp:25,  dmg:5,  spd:1.0, size:24, xp:10,  gold:2,  color:'#44cc44' },
-        skeleton: { name:'骷髅兵', hp:60,  dmg:10, spd:0.8, size:28, xp:22,  gold:5,  color:'#cccccc' },
-        demon:    { name:'恶魔',   hp:130, dmg:20, spd:1.3, size:32, xp:50,  gold:12, color:'#cc4444' },
-        boss:     { name:'巨龙',   hp:500, dmg:35, spd:0.5, size:48, xp:250, gold:50, color:'#8844cc' },
+        slime:    { name:'史莱姆', hp:25,  dmg:5,  spd:1.0, size:36, xp:10,  gold:2,  color:'#44cc44' },
+        skeleton: { name:'骷髅兵', hp:60,  dmg:10, spd:0.8, size:42, xp:22,  gold:5,  color:'#cccccc' },
+        demon:    { name:'恶魔',   hp:130, dmg:20, spd:1.3, size:48, xp:50,  gold:12, color:'#cc4444' },
+        boss:     { name:'巨龙',   hp:500, dmg:35, spd:0.5, size:72, xp:250, gold:50, color:'#8844cc' },
     },
     SKILLS: {
-        fire: { name:'火球术', desc:'全屏随机火球坠落', cooldown:18, icon:IMG.skillFire, fireballs:8, damage:40 },
-        ice:  { name:'冰霜剑', desc:'扩散冰剑扇形攻击', cooldown:15, icon:IMG.skillIce, swords:5, damage:30 },
+        fire: { name:'火球术', desc:'全屏随机火球坠落', cooldown:18, icon:IMG.skillFire, fireballs:14, damage:40 },
+        ice:  { name:'冰霜剑', desc:'扩散冰剑扇形攻击', cooldown:15, icon:IMG.skillIce, swords:7, damage:30 },
     },
     HERO: {
         baseHp: 120, baseAtk: 20, baseAtkSpd: 2.5, baseSpd: 4.0,
-        bulletSpeed: 8, bulletSize: 8, bulletPierce: 1,
+        bulletSpeed: 8, bulletSize: 12, bulletPierce: 1,
     },
     XP_BASE: 20, XP_GROW: 1.28,
     PERM_UPGRADES: {
@@ -269,7 +269,7 @@ class Enemy {
         game.addXP(this.xp);
     }
     draw(ctx) {
-        const drawSize=this.size*2;
+        const drawSize=this.size*3.5;
         if (this.sprite) {
             ctx.save();
             if(this.hitFlash>0) ctx.globalAlpha=0.5;
@@ -280,12 +280,12 @@ class Enemy {
             ctx.restore();
         } else {
             ctx.fillStyle=this.hitFlash>0?'#fff':this.color;
-            ctx.beginPath(); ctx.arc(this.x,this.y,this.size/2,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(this.x,this.y,this.size*0.7,0,Math.PI*2); ctx.fill();
             ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=2; ctx.stroke();
         }
         // 血条
         const hpR=this.hp/this.maxHp;
-        const bw=this.size*1.2, bh=3, by=this.y-this.size/2-8;
+        const bw=this.size*1.8, bh=4, by=this.y-this.size*0.7-10;
         ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(this.x-bw/2,by,bw,bh);
         ctx.fillStyle=hpR>0.3?'#4a4':'#c44'; ctx.fillRect(this.x-bw/2,by,bw*hpR,bh);
     }
@@ -294,24 +294,47 @@ class Enemy {
 
 // ==================== 技能特效 ====================
 class Fireball {
-    constructor(x, y, damage) {
-        this.x=x; this.y=y; this.targetY=rand(this.y+50, this.y+200);
-        this.damage=damage; this.timer=0; this.duration=0.8;
+    constructor(x, y, damage, gameH) {
+        this.x=x; this.y=y;
+        this.targetY=rand(150, gameH-80);
+        this.damage=damage; this.timer=0; this.duration=1.0;
         this.dead=false; this.exploded=false;
         this.sprite=Assets.getSprite('skillFire');
+        this.trail=[];
+        this.gameH=gameH;
     }
     update(dt, game) {
         this.timer+=dt;
-        this.y+=(this.targetY-this.y)*0.08;
+        this.y+=(this.targetY-this.y)*0.06;
+        this.trail.push({x:this.x, y:this.y, life:0.15});
+        for(let i=this.trail.length-1;i>=0;i--) {
+            this.trail[i].life-=dt;
+            if(this.trail[i].life<=0) this.trail.splice(i,1);
+        }
         if(this.timer>=this.duration) {
             if(!this.exploded) {
                 this.exploded=true;
+                // 屏幕震动
+                game.screenShake=0.15;
+                // 爆炸范围 AOE
                 game.enemies.forEach(e=>{
-                    if(dist(e,this)<60) e.takeDamage(this.damage,game);
+                    if(dist(e,this)<80) e.takeDamage(this.damage,game);
                 });
-                for(let i=0;i<15;i++) {
+                // 大量粒子
+                for(let i=0;i<25;i++) {
+                    const angle=rand(0,Math.PI*2);
+                    const spd=rand(2,6);
                     game.particles.push(new Particle(this.x,this.y,{
-                        vx:rand(-3,3), vy:rand(-3,1), color:'#ff6600', life:0.5, size:rand(3,7)
+                        vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd,
+                        color:Math.random()>0.5?'#ff6600':'#ffcc00',
+                        life:0.6, size:rand(3,8)
+                    }));
+                }
+                // 冲击波
+                for(let i=0;i<8;i++) {
+                    game.particles.push(new Particle(this.x,this.y,{
+                        vx:rand(-1.5,1.5), vy:rand(-1.5,1.5),
+                        color:'#ff4400', life:0.3, size:rand(10,20)
                     }));
                 }
             }
@@ -319,47 +342,88 @@ class Fireball {
         }
     }
     draw(ctx) {
-        const a=this.timer<0.3?this.timer/0.3:1;
+        const progress=this.timer/this.duration;
+        // 尾迹
+        for(const t of this.trail) {
+            const a=t.life/0.15;
+            ctx.globalAlpha=a*0.6;
+            ctx.fillStyle='#ff6600';
+            ctx.beginPath(); ctx.arc(t.x, t.y, 4, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.globalAlpha=1;
+        const a=this.timer<0.2?this.timer/0.2:1;
+        // 火球本体
         if (this.sprite) {
             ctx.globalAlpha=a;
-            ctx.drawImage(this.sprite, this.x-20, this.y-20, 40, 40);
+            const sz=24+progress*10;
+            ctx.drawImage(this.sprite, this.x-sz, this.y-sz, sz*2, sz*2);
             ctx.globalAlpha=1;
         } else {
-            ctx.globalAlpha=a; ctx.fillStyle='#ff6600'; ctx.shadowColor='#ff4400'; ctx.shadowBlur=12;
-            ctx.beginPath(); ctx.arc(this.x,this.y,10,0,Math.PI*2); ctx.fill();
+            ctx.globalAlpha=a;
+            ctx.fillStyle='#ff6600'; ctx.shadowColor='#ff4400'; ctx.shadowBlur=18;
+            ctx.beginPath(); ctx.arc(this.x,this.y,14+progress*5,0,Math.PI*2); ctx.fill();
             ctx.shadowBlur=0; ctx.globalAlpha=1;
         }
+        // 光晕
+        ctx.globalAlpha=a*0.3;
+        ctx.fillStyle='#ffcc00';
+        ctx.beginPath(); ctx.arc(this.x,this.y,20+progress*8,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha=1;
     }
 }
 
 class IceSword {
     constructor(x, y, vx, vy, damage) {
         this.x=x; this.y=y; this.vx=vx; this.vy=vy; this.damage=damage;
-        this.life=1.5; this.dead=false; this.hit=new Set();
+        this.life=1.5; this.maxLife=1.5; this.dead=false; this.hit=new Set();
         this.sprite=Assets.getSprite('skillIce');
+        this.trail=[];
     }
     update(dt, game) {
         this.x+=this.vx*60*dt; this.y+=this.vy*60*dt;
+        this.trail.push({x:this.x, y:this.y, life:0.12});
+        for(let i=this.trail.length-1;i>=0;i--) {
+            this.trail[i].life-=dt;
+            if(this.trail[i].life<=0) this.trail.splice(i,1);
+        }
         this.life-=dt; if(this.life<=0) this.dead=true;
         game.enemies.forEach(e=>{
             if(this.hit.has(e)) return;
-            if(dist(this,e)<(24+e.size/2)) {
+            if(dist(this,e)<(26+e.size*0.5)) {
                 this.hit.add(e); e.takeDamage(this.damage,game);
+                for(let i=0;i<5;i++) {
+                    game.particles.push(new Particle(this.x,this.y,{
+                        vx:rand(-1,1), vy:rand(-1,1), color:'#88ddff', life:0.3, size:rand(2,4)
+                    }));
+                }
             }
         });
     }
     draw(ctx) {
+        // 尾迹
+        for(const t of this.trail) {
+            const a=t.life/0.12;
+            ctx.globalAlpha=a*0.5;
+            ctx.fillStyle='#88ddff';
+            ctx.beginPath(); ctx.arc(t.x, t.y, 3, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.globalAlpha=1;
+        const a=Math.min(1, this.life/0.3);
         if (this.sprite) {
             ctx.save();
+            ctx.globalAlpha=a;
             ctx.translate(this.x, this.y);
             ctx.rotate(Math.atan2(this.vy, this.vx));
-            ctx.drawImage(this.sprite, -16, -16, 32, 32);
+            const sz=22;
+            ctx.drawImage(this.sprite, -sz, -sz, sz*2, sz*2);
             ctx.restore();
         } else {
-            ctx.fillStyle='#66ccff'; ctx.shadowColor='#66ccff'; ctx.shadowBlur=8;
-            ctx.beginPath(); ctx.arc(this.x,this.y,8,0,Math.PI*2); ctx.fill();
+            ctx.globalAlpha=a;
+            ctx.fillStyle='#66ccff'; ctx.shadowColor='#88ddff'; ctx.shadowBlur=12;
+            ctx.beginPath(); ctx.arc(this.x,this.y,10,0,Math.PI*2); ctx.fill();
             ctx.shadowBlur=0;
         }
+        ctx.globalAlpha=1;
     }
 }
 
@@ -371,7 +435,7 @@ class Hero {
         this.baseAtk=CFG.HERO.baseAtk + permUpgrades.atk*3;
         this.baseAtkSpd=CFG.HERO.baseAtkSpd * (1 + permUpgrades.atkSpd*0.1);
         this.baseSpd=CFG.HERO.baseSpd + permUpgrades.spd*0.3;
-        this.size=26;
+        this.size=30;
         this.x=200; this.y=620;
         this.level=1; this.xp=0; this.xpToNext=CFG.XP_BASE;
         this.dead=false; this.invulnTimer=0;
@@ -399,9 +463,26 @@ class Hero {
         for(const k in this.skillCooldowns) {
             if(this.skillCooldowns[k]>0) this.skillCooldowns[k]-=dt;
         }
-        // 移动
-        this.x+=this.moveDir*this.getSpd()*60*dt;
-        this.x=clamp(this.x,this.size,game.gameW-this.size);
+        // 移动 - 触屏直接跟随，键盘用方向
+        if(Input.touchActive) {
+            const targetX = Input.getTargetX(game);
+            if(targetX !== null) {
+                const diff = targetX - this.x;
+                const maxStep = this.getSpd() * 60 * dt;
+                if(Math.abs(diff) < maxStep) {
+                    this.x = targetX;
+                    this.moveDir = 0;
+                } else {
+                    this.x += Math.sign(diff) * maxStep;
+                    this.moveDir = Math.sign(diff);
+                }
+            }
+        } else {
+            const kb = Input.getKeyboardDir();
+            this.moveDir = kb;
+            this.x += kb * this.getSpd() * 60 * dt;
+        }
+        this.x = clamp(this.x, this.size*2, game.gameW-this.size*2);
         // 动画
         if(this.moveDir!==0) {
             this.animTimer+=dt;
@@ -455,7 +536,7 @@ class Hero {
     }
     draw(ctx) {
         if(this.dead) return;
-        const drawSize=this.size*2.5;
+        const drawSize=this.size*4.5;
         // 无敌闪烁
         if(this.invulnTimer>0&&Math.floor(this.invulnTimer*20)%2===0) return;
         if (this.sprite) {
@@ -494,16 +575,36 @@ const Input = {
             },{passive:false});
             canvas.addEventListener('touchmove',e=>{
                 e.preventDefault();
-                if(this.touchActive) this.touchX=e.touches[0].clientX;
+                this.touchX=e.touches[0].clientX;
             },{passive:false});
             canvas.addEventListener('touchend',e=>{ e.preventDefault(); this.touchActive=false; },{passive:false});
+            canvas.addEventListener('touchcancel',e=>{ this.touchActive=false; });
             canvas.addEventListener('mousedown',e=>{
                 this.touchActive=true; this.touchX=e.clientX;
-                const mm=e=>{ if(this.touchActive) this.touchX=e.clientX; };
-                const mu=()=>{ this.touchActive=false; document.removeEventListener('mousemove',mm); document.removeEventListener('mouseup',mu); };
-                document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu);
             });
+            window.addEventListener('mousemove',e=>{
+                if(this.touchActive) this.touchX=e.clientX;
+            });
+            window.addEventListener('mouseup',()=>{ this.touchActive=false; });
         }
+    },
+    getTargetX(game) {
+        if(this.touchActive) {
+            const canvas=document.getElementById('gameCanvas');
+            if(!canvas) return null;
+            const rect=canvas.getBoundingClientRect();
+            const relX=this.touchX-rect.left;
+            const scale=rect.width/game.gameW;
+            const worldX=relX/scale;
+            return clamp(worldX, game.hero.size*2, game.gameW-game.hero.size*2);
+        }
+        return null;
+    },
+    getKeyboardDir() {
+        let d=0;
+        if(this.keys['a']||this.keys['arrowleft']) d=-1;
+        if(this.keys['d']||this.keys['arrowright']) d=1;
+        return d;
     },
     getMoveDir(heroX) {
         if(this.touchActive) {
@@ -517,10 +618,7 @@ const Input = {
             if(worldX>heroX+8) return 1;
             return 0;
         }
-        let d=0;
-        if(this.keys['a']||this.keys['arrowleft']) d=-1;
-        if(this.keys['d']||this.keys['arrowright']) d=1;
-        return d;
+        return this.getKeyboardDir();
     },
 };
 
@@ -568,6 +666,7 @@ class Game {
         this.hero=null; this.enemies=[]; this.bullets=[];
         this.particles=[]; this.fireballs=[]; this.iceSwords=[];
         this.kills=0; this.score=0; this.goldEarned=0;
+        this.screenShake=0; this._pendingWave=false;
         this.gameOver=false; this.victory=false;
         this._itemBarDirty=false;
         window._game=this;
@@ -602,7 +701,7 @@ class Game {
         this.kills=0; this.score=0; this.goldEarned=0;
         this.hero=new Hero(DB.data.permUpgrades);
         this.hero.x=this.gameW/2;
-        this.hero.y=this.gameH-80;
+        this.hero.y=this.gameH-70;
         this.resize();
         this.lastTime=performance.now();
         this.showWaveTransition();
@@ -626,8 +725,7 @@ class Game {
             if(!this.gameOver) { this.gameOver=true; this.onGameOver(); }
             return;
         }
-        // 英雄移动
-        h.moveDir=Input.getMoveDir(h.x);
+        // 英雄
         h.update(dt, this);
         // 子弹
         for(let i=this.bullets.length-1;i>=0;i--) {
@@ -636,7 +734,7 @@ class Game {
             if(b.dead) { this.bullets.splice(i,1); continue; }
             for(const e of this.enemies) {
                 if(b.hit.has(e)) continue;
-                if(dist(b,e)<(b.size+e.size/2)) {
+                if(dist(b,e)<(b.size*0.8+e.size*0.4)) {
                     b.hit.add(e); e.takeDamage(b.damage,this);
                     b.pierce--; if(b.pierce<=0) { b.dead=true; break; }
                 }
@@ -652,6 +750,11 @@ class Game {
                 h.takeDamage(e.damage);
                 e.dead=true;
                 this.enemies.splice(i,1);
+                for(let j=0;j<6;j++) {
+                    this.particles.push(new Particle(e.x,this.gameH-15,{
+                        vx:rand(-2,2), vy:rand(-3,0), color:'#ff4444', life:0.3, size:rand(2,4)
+                    }));
+                }
             }
         }
         // 火球
@@ -710,7 +813,11 @@ class Game {
         this.waveSpawned=0; this.waveSpawnTimer=0.5;
     }
     showWaveTransition() {
-        if(!document.getElementById('levelUpScreen').classList.contains('hidden')) return;
+        if(!document.getElementById('levelUpScreen').classList.contains('hidden')) {
+            this._pendingWave=true;
+            return;
+        }
+        this._pendingWave=false;
         this.paused=true;
         document.getElementById('waveTitle').textContent='第 '+this.currentWave+' 波';
         const data=getWaveData(this.currentWave);
@@ -732,17 +839,17 @@ class Game {
             const count=cfg.fireballs+Math.floor(h.bonusSkillDmg*5);
             for(let i=0;i<count;i++) {
                 this.fireballs.push(new Fireball(
-                    rand(30,this.gameW-30), -rand(10,60),
-                    Math.floor(cfg.damage*dmgMul)
+                    rand(20,this.gameW-20), -rand(20,80),
+                    Math.floor(cfg.damage*dmgMul), this.gameH
                 ));
             }
         } else if(type==='ice') {
             const count=cfg.swords+Math.floor(h.bonusSkillDmg*3);
-            const spreadAngle=Math.PI/3;
+            const spreadAngle=Math.PI*0.7;
             const startAngle=-Math.PI/2-spreadAngle/2;
             for(let i=0;i<count;i++) {
-                const a=startAngle+(i/(count-1))*spreadAngle;
-                const spd=rand(3,5);
+                const a=startAngle+(i/(Math.max(1,count-1)))*spreadAngle;
+                const spd=rand(3.5,5.5);
                 this.iceSwords.push(new IceSword(h.x, h.y, Math.cos(a)*spd, Math.sin(a)*spd, Math.floor(cfg.damage*dmgMul)));
             }
         }
@@ -763,7 +870,12 @@ class Game {
             div.onclick=()=>{
                 this.hero.applyUpgrade(opt);
                 document.getElementById('levelUpScreen').classList.add('hidden');
-                this.paused=false;
+                if(this._pendingWave) {
+                    this._pendingWave=false;
+                    this.showWaveTransition();
+                } else {
+                    this.paused=false;
+                }
             };
             container.appendChild(div);
         });
@@ -788,9 +900,16 @@ class Game {
         // 暗色背景
         ctx.fillStyle='#0a0a1a';
         ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+        // 屏幕震动
+        let shakeX=0, shakeY=0;
+        if(this.screenShake>0) {
+            shakeX=rand(-4,4)*this.screenShake*10;
+            shakeY=rand(-4,4)*this.screenShake*10;
+            this.screenShake=Math.max(0,this.screenShake-0.02);
+        }
         // 游戏区域
         ctx.save();
-        ctx.translate(this.renderX, this.renderY);
+        ctx.translate(this.renderX+shakeX, this.renderY+shakeY);
         ctx.scale(this.scale, this.scale);
         // 背景
         const bgImg=Assets.getRaw('bg');
@@ -800,17 +919,11 @@ class Game {
             ctx.fillStyle=this.stageCfg.bgColor;
             ctx.fillRect(0,0,this.gameW,this.gameH);
         }
-        // 道路
-        ctx.fillStyle='rgba(139,119,80,0.3)';
-        ctx.fillRect(this.gameW*0.2, 0, this.gameW*0.6, this.gameH);
-        // 网格线
-        ctx.strokeStyle='rgba(255,255,255,0.05)';
-        ctx.lineWidth=0.5;
-        for(let x=0;x<this.gameW;x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,this.gameH); ctx.stroke(); }
-        for(let y=0;y<this.gameH;y+=40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(this.gameW,y); ctx.stroke(); }
-        // 底部防线
-        ctx.strokeStyle='rgba(255,50,50,0.5)'; ctx.lineWidth=2;
+        // 底部防线（细线）
+        ctx.strokeStyle='rgba(255,80,80,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([8,4]);
         ctx.beginPath(); ctx.moveTo(0,this.gameH-15); ctx.lineTo(this.gameW,this.gameH-15); ctx.stroke();
+        ctx.setLineDash([]);
         // 粒子
         for(const pt of this.particles) pt.draw(ctx);
         // 火球
