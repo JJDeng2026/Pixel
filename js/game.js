@@ -1,11 +1,71 @@
 /**
  * ============================================
- * 亡灵骑士·夏侯惇 - 游戏引擎 v2.0
- * AI图像渲染 | 道具系统 | 敌人AI优化 | 全屏技能
+ * 亡灵骑士·夏侯惇 - 游戏引擎 v3.0
+ * 绿幕抠图渲染 | 无缝背景 | 纯文字UI
  * ============================================
  */
 (function(){
 'use strict';
+
+// ==================== 绿幕抠图工具 ====================
+const ChromaKey = {
+    // 缓存已处理的无背景图
+    cache: {},
+    // 绿幕颜色范围 (带容差)
+    keyR: {min:0, max:80},   // 绿色通道远大于红蓝即为绿幕
+    tolerance: 100,
+
+    /** 从Image创建无背景的Canvas */
+    process(img, key) {
+        if (this.cache[key]) return this.cache[key];
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, c.width, c.height);
+        const pixels = data.data;
+        for (let i = 0; i < pixels.length; i += 4) {
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+            // 检测绿幕: 绿色分量明显高于红蓝，且绿色足够亮
+            if (g > 100 && g > r * 1.4 && g > b * 1.2) {
+                pixels[i + 3] = 0; // 设为透明
+            }
+        }
+        ctx.putImageData(data, 0, 0);
+        this.cache[key] = c;
+        return c;
+    },
+
+    /** 带边缘柔化的处理 */
+    processSoft(img, key) {
+        if (this.cache[key + '_soft']) return this.cache[key + '_soft'];
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, c.width, c.height);
+        const pixels = data.data;
+        for (let i = 0; i < pixels.length; i += 4) {
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+            if (g > 80 && g > r * 1.3 && g > b * 1.1) {
+                // 计算绿色程度，用于边缘柔化
+                const greenness = Math.min(1, (g - Math.max(r, b)) / 100);
+                pixels[i + 3] = Math.round(255 * (1 - greenness));
+            }
+        }
+        ctx.putImageData(data, 0, 0);
+        this.cache[key + '_soft'] = c;
+        return c;
+    },
+
+    clear() { this.cache = {}; }
+};
 
 // ==================== 图片资源路径 ====================
 const IMG = {
@@ -17,11 +77,9 @@ const IMG = {
         demon:    'assets/images/ai_enemy_demon.jpg',
         boss:     'assets/images/ai_enemy_boss.jpg',
     },
-    bg:       'assets/images/ai_bg_battlefield.jpg',
-    skillUlt: 'assets/images/ai_skill_ult.jpg',
-    skillFire:'assets/images/ai_skill_fire.jpg',
-    itemPower:'assets/images/ai_item_power.jpg',
+    bgTile: 'assets/images/ai_bg_tile.jpg',
     itemBomb: 'assets/images/ai_item_bomb.jpg',
+    itemPower:'assets/images/ai_item_power.jpg',
     itemHeal: 'assets/images/ai_item_heal.jpg',
 };
 
@@ -33,16 +91,14 @@ const CFG = {
     PLAYER_ATK_SPD: 1.2,
     XP_BASE: 40, XP_GROW: 1.45,
     MAX_LEVEL: 60,
-    // 敌人AI参数
-    ENEMY_CHASE_RANGE: 350,    // 敌人追击范围
-    ENEMY_WANDER_SPEED: 0.4,   // 闲逛速度倍率
-    ENEMY_STUN_TIME: 3,        // 受击后眩晕时间(秒)
-    // 道具参数
-    ITEM_DROP_CHANCE: 0.08,    // 击杀掉落道具概率
+    ENEMY_CHASE_RANGE: 350,
+    ENEMY_WANDER_SPEED: 0.4,
+    ENEMY_STUN_TIME: 3,
+    ITEM_DROP_CHANCE: 0.08,
     ITEM_TYPES: {
-        bomb: { name:'暗影炸弹', icon:'💣', desc:'全屏爆炸伤害', img:IMG.itemBomb, skill:'bomb', cooldown:8 },
-        power:{ name:'黑暗能量', icon:'💎', desc:'全屏暗影爆发', img:IMG.itemPower, skill:'ult', cooldown:10 },
-        heal: { name:'生命药水', icon:'🧪', desc:'恢复50%生命',  img:IMG.itemHeal, skill:'heal', cooldown:5 },
+        bomb: { name:'暗影炸弹', desc:'全屏爆炸伤害', img:IMG.itemBomb, skill:'bomb', cooldown:8 },
+        power:{ name:'黑暗能量', desc:'全屏暗影爆发', img:IMG.itemPower, skill:'ult', cooldown:10 },
+        heal: { name:'生命药水', desc:'恢复50%生命',  img:IMG.itemHeal, skill:'heal', cooldown:5 },
     },
     ENEMY_TYPES: {
         wraith:  { name:'怨灵',    hp:25, dmg:6,  spd:2.8, size:22, color:'#8b5cf6', xp:12,  gold:3,  chaseRange:280, wanderSpd:0.5 },
@@ -52,12 +108,12 @@ const CFG = {
         boss:    { name:'妖将',    hp:800,dmg:40, spd:1.2, size:50, color:'#ff4444', xp:500, gold:100,chaseRange:500, wanderSpd:0.2 },
     },
     WEAPONS: {
-        soulBlade:   { name:'灵魂之刃',   desc:'近战弧形斩击',   icon:'⚔️', maxLv:6, color:'#c8a84e', rarity:'common' },
-        shadowBolt:  { name:'暗影弹幕',   desc:'自动发射暗影弹', icon:'🏹', maxLv:6, color:'#8b5cf6', rarity:'common' },
-        deathAura:   { name:'死亡光环',   desc:'周围持续伤害',   icon:'💫', maxLv:6, color:'#cc3333', rarity:'uncommon' },
-        hellfire:    { name:'冥火风暴',   desc:'随机范围火焰',   icon:'🔥', maxLv:6, color:'#ff6600', rarity:'uncommon' },
-        lightning:   { name:'冥雷链',     desc:'连锁闪电攻击',   icon:'⚡', maxLv:6, color:'#ffcc00', rarity:'rare' },
-        frostNova:   { name:'冰霜新星',   desc:'周期性冰冻爆发', icon:'❄️', maxLv:6, color:'#66ccff', rarity:'rare' },
+        soulBlade:   { name:'灵魂之刃',   desc:'近战弧形斩击',   maxLv:6, color:'#c8a84e', rarity:'common' },
+        shadowBolt:  { name:'暗影弹幕',   desc:'自动发射暗影弹', maxLv:6, color:'#8b5cf6', rarity:'common' },
+        deathAura:   { name:'死亡光环',   desc:'周围持续伤害',   maxLv:6, color:'#cc3333', rarity:'uncommon' },
+        hellfire:    { name:'冥火风暴',   desc:'随机范围火焰',   maxLv:6, color:'#ff6600', rarity:'uncommon' },
+        lightning:   { name:'冥雷链',     desc:'连锁闪电攻击',   maxLv:6, color:'#ffcc00', rarity:'rare' },
+        frostNova:   { name:'冰霜新星',   desc:'周期性冰冻爆发', maxLv:6, color:'#66ccff', rarity:'rare' },
     },
     PERM_UPGRADES: {
         maxHp:  { name:'生命强化', desc:'+10 最大生命', baseCost:80,  costMul:1.4, maxLv:20 },
@@ -68,17 +124,17 @@ const CFG = {
         magnet:{ name:'磁铁强化', desc:'+15% 拾取范围',baseCost:100, costMul:1.3, maxLv:10 },
     },
     LEVEL_OPTIONS: [
-        { type:'stat', id:'maxHp',    name:'生命强化',   desc:'+15 最大生命值',  icon:'❤️', weight:15 },
-        { type:'stat', id:'maxHp2',   name:'生命强化+',  desc:'+25 最大生命值',  icon:'❤️', weight:8 },
-        { type:'stat', id:'damage',   name:'攻击强化',   desc:'+3 基础伤害',     icon:'⚔️', weight:15 },
-        { type:'stat', id:'damage2',  name:'攻击强化+',  desc:'+6 基础伤害',     icon:'⚔️', weight:8 },
-        { type:'stat', id:'speed',    name:'速度提升',   desc:'+0.25 移动速度',  icon:'👟', weight:12 },
-        { type:'stat', id:'atkSpd',   name:'攻速提升',   desc:'+10% 攻击速度',   icon:'💨', weight:12 },
-        { type:'stat', id:'armor',    name:'护甲提升',   desc:'+1 伤害减免',     icon:'🛡️', weight:10 },
-        { type:'stat', id:'magnet',   name:'磁铁',       desc:'+20% 拾取范围',   icon:'🧲', weight:8 },
-        { type:'stat', id:'heal',     name:'即时治疗',   desc:'恢复35%最大生命',  icon:'💚', weight:10 },
-        { type:'weapon', id:'newWeapon', name:'新武器',  desc:'获得一件新武器',   icon:'🗡️', weight:8 },
-        { type:'weapon', id:'upgradeWeapon', name:'武器升级', desc:'随机武器升1级',icon:'⬆️', weight:10 },
+        { type:'stat', id:'maxHp',    name:'生命强化',   desc:'+15 最大生命值',  weight:15 },
+        { type:'stat', id:'maxHp2',   name:'生命强化+',  desc:'+25 最大生命值',  weight:8 },
+        { type:'stat', id:'damage',   name:'攻击强化',   desc:'+3 基础伤害',     weight:15 },
+        { type:'stat', id:'damage2',  name:'攻击强化+',  desc:'+6 基础伤害',     weight:8 },
+        { type:'stat', id:'speed',    name:'速度提升',   desc:'+0.25 移动速度',  weight:12 },
+        { type:'stat', id:'atkSpd',   name:'攻速提升',   desc:'+10% 攻击速度',   weight:12 },
+        { type:'stat', id:'armor',    name:'护甲提升',   desc:'+1 伤害减免',     weight:10 },
+        { type:'stat', id:'magnet',   name:'磁铁范围',   desc:'+20% 拾取范围',   weight:8 },
+        { type:'stat', id:'heal',     name:'即时治疗',   desc:'恢复35%最大生命',  weight:10 },
+        { type:'weapon', id:'newWeapon', name:'新武器',  desc:'获得一件新武器',   weight:8 },
+        { type:'weapon', id:'upgradeWeapon', name:'武器升级', desc:'随机武器升1级',weight:10 },
     ],
 };
 
@@ -90,11 +146,9 @@ const Assets = {
         const urls = [];
         urls.push({key:'player', url:IMG.player});
         for(const [k,v] of Object.entries(IMG.enemies)) urls.push({key:'enemy_'+k, url:v});
-        urls.push({key:'bg', url:IMG.bg});
-        urls.push({key:'skillUlt', url:IMG.skillUlt});
-        urls.push({key:'skillFire', url:IMG.skillFire});
-        urls.push({key:'itemPower', url:IMG.itemPower});
+        urls.push({key:'bgTile', url:IMG.bgTile});
         urls.push({key:'itemBomb', url:IMG.itemBomb});
+        urls.push({key:'itemPower', url:IMG.itemPower});
         urls.push({key:'itemHeal', url:IMG.itemHeal});
         this.total = urls.length;
         return Promise.all(urls.map(item=>this.loadImage(item.key, item.url)));
@@ -102,12 +156,25 @@ const Assets = {
     loadImage(key, url) {
         return new Promise((resolve)=>{
             const img = new Image();
-            img.onload = ()=>{ this.loaded[key]=img; this.count++; resolve(); };
-            img.onerror = ()=>{ this.count++; resolve(); }; // 容错
+            img.onload = ()=>{
+                this.loaded[key]=img;
+                // 预生成绿幕抠图版本
+                if (key === 'player' || key.startsWith('enemy_') || key.startsWith('item')) {
+                    ChromaKey.processSoft(img, key);
+                }
+                this.count++;
+                resolve();
+            };
+            img.onerror = ()=>{ this.count++; resolve(); };
             img.src = url;
         });
     },
-    get(key) { return this.loaded[key]||null; },
+    getRaw(key) { return this.loaded[key]||null; },
+    getSprite(key) {
+        const img = this.loaded[key];
+        if (!img) return null;
+        return ChromaKey.processSoft(img, key);
+    },
     progress() { return this.total>0?this.count/this.total:0; },
 };
 
@@ -207,7 +274,7 @@ class Projectile {
     }
 }
 
-// ==================== 敌人 (AI图像渲染 + 优化AI) ====================
+// ==================== 敌人 (绿幕抠图渲染 + 优化AI) ====================
 class Enemy {
     constructor(type, x, y, difficulty=1) {
         const cfg = CFG.ENEMY_TYPES[type];
@@ -218,33 +285,28 @@ class Enemy {
         this.xpVal=cfg.xp; this.goldVal=cfg.gold;
         this.dead=false; this.slowTimer=0; this.hitFlash=0;
         this.anim=Math.random()*Math.PI*2;
-        // 新AI系统
-        this.stunTimer=0;           // 受击眩晕计时器
-        this.state='idle';          // idle | wander | chase
+        this.stunTimer=0;
+        this.state='idle';
         this.wanderTarget={x:x+rand(-100,100), y:y+rand(-100,100)};
         this.wanderTimer=rand(1,3);
         this.chaseRange=cfg.chaseRange||300;
         this.wanderSpd=cfg.wanderSpd||0.3;
         this.animFrame=0; this.animTimer=0;
-        this.img=Assets.get('enemy_'+type);
+        this.sprite=Assets.getSprite('enemy_'+type);
     }
     update(dt, player) {
         if(this.dead) return;
-        // 减速效果
         if(this.slowTimer>0) { this.spd=this.baseSpd*0.4; this.slowTimer-=dt; }
         else this.spd=this.baseSpd;
         this.hitFlash=Math.max(0,this.hitFlash-dt);
-        // 受击眩晕
         if(this.stunTimer>0) {
             this.stunTimer-=dt;
-            this.state='idle';
-            return; // 不动
+            this.state='stun';
+            return;
         }
-        // 动画
         this.animTimer+=dt;
         if(this.animTimer>0.2) { this.animTimer=0; this.animFrame=(this.animFrame+1)%4; }
         const d=dist(this,player);
-        // AI状态机
         if(d<this.chaseRange) {
             this.state='chase';
         } else if(this.state==='chase') {
@@ -253,14 +315,12 @@ class Enemy {
             this.wanderTimer=rand(2,4);
         }
         if(this.state==='chase') {
-            // 追击玩家 (但速度有上限，不会全部紧贴)
             if(d>1) {
                 const spd=this.spd*60*dt;
                 this.x+=(player.x-this.x)/d*spd;
                 this.y+=(player.y-this.y)/d*spd;
             }
-        } else {
-            // 闲逛
+        } else if(this.state==='wander') {
             this.wanderTimer-=dt;
             const wd=dist(this,this.wanderTarget);
             if(wd<10||this.wanderTimer<=0) {
@@ -272,14 +332,13 @@ class Enemy {
                 this.y+=(this.wanderTarget.y-this.y)/wd*wSpd;
             }
         }
-        // 边界限制
         this.x=clamp(this.x,20,CFG.MAP_W-20);
         this.y=clamp(this.y,20,CFG.MAP_H-20);
     }
     takeDamage(dmg, game) {
         this.hp-=dmg; this.hitFlash=0.1;
-        this.stunTimer=CFG.ENEMY_STUN_TIME; // 受击后原地暂停3秒
-        this.state='idle';
+        this.stunTimer=CFG.ENEMY_STUN_TIME;
+        this.state='stun';
         if(this.hp<=0) { this.die(game); return true; }
         return false;
     }
@@ -288,11 +347,9 @@ class Enemy {
         game.spawnXP(this.x,this.y,this.xpVal);
         game.spawnGold(this.x,this.y,this.goldVal);
         game.kills++; game.score+=this.xpVal;
-        // 道具掉落
         if(Math.random()<CFG.ITEM_DROP_CHANCE) {
             const itemTypes=['bomb','power','heal'];
-            const it=itemTypes[randInt(0,itemTypes.length-1)];
-            game.spawnItem(this.x,this.y,it);
+            game.spawnItem(this.x,this.y,itemTypes[randInt(0,itemTypes.length-1)]);
         }
         for(let i=0;i<12;i++) {
             game.particles.push(new Particle(this.x,this.y,{
@@ -305,28 +362,19 @@ class Enemy {
     draw(ctx, cam) {
         const sx=this.x-cam.x, sy=this.y-cam.y;
         const floatY=Math.sin(Date.now()/300+this.anim)*2;
-        if(this.img&&this.img.complete) {
-            // 使用AI图像
-            const drawSize=this.size*2.5;
-            const dx=sx-drawSize/2, dy=sy-drawSize/2+floatY;
-            if(this.hitFlash>0) {
-                ctx.globalAlpha=0.6;
-                ctx.drawImage(this.img, dx, dy, drawSize, drawSize);
-                ctx.globalAlpha=1;
-                ctx.fillStyle='rgba(255,255,255,0.5)';
-                ctx.beginPath(); ctx.arc(sx,sy+floatY,drawSize/2,0,Math.PI*2); ctx.fill();
+        const drawSize=this.size*2.5;
+        const dx=sx-drawSize/2, dy=sy-drawSize/2+floatY;
+        if (this.sprite) {
+            // 绿幕抠图后的精灵渲染
+            if (this.hitFlash>0) {
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(this.sprite, dx, dy, drawSize, drawSize);
+                ctx.globalAlpha = 1;
             } else {
-                ctx.drawImage(this.img, dx, dy, drawSize, drawSize);
-            }
-            // 眩晕指示器
-            if(this.stunTimer>0) {
-                ctx.fillStyle='rgba(255,255,0,0.3)';
-                ctx.beginPath(); ctx.arc(sx,sy+floatY,drawSize/2+4,0,Math.PI*2); ctx.fill();
-                ctx.fillStyle='#fff'; ctx.font='10px sans-serif';
-                ctx.fillText('眩晕 '+this.stunTimer.toFixed(1)+'s', sx-20, sy-drawSize/2-8);
+                ctx.drawImage(this.sprite, dx, dy, drawSize, drawSize);
             }
         } else {
-            // 回退：几何绘制
+            // 回退几何绘制
             const color=this.hitFlash>0?'#fff':this.color;
             ctx.fillStyle=color;
             ctx.beginPath();
@@ -342,6 +390,14 @@ class Enemy {
             ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=2; ctx.stroke();
             this.drawEyes(ctx,sx,sy+floatY);
         }
+        // 眩晕指示器
+        if(this.stunTimer>0) {
+            ctx.fillStyle='rgba(255,255,0,0.25)';
+            ctx.beginPath(); ctx.arc(sx,sy+floatY,drawSize/2+4,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+            ctx.fillText('\u7729\u6655 '+this.stunTimer.toFixed(1)+'s', sx, sy-drawSize/2-8);
+            ctx.textAlign='start';
+        }
         // 减速效果
         if(this.slowTimer>0) {
             ctx.strokeStyle='rgba(100,200,255,0.6)'; ctx.lineWidth=2;
@@ -352,11 +408,6 @@ class Enemy {
         const bw=this.size*1.2; const bh=3; const by=sy-this.size/2-12;
         ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(sx-bw/2,by,bw,bh);
         ctx.fillStyle=hpR>0.3?'#4a4':'#c44'; ctx.fillRect(sx-bw/2,by,bw*hpR,bh);
-        // 状态标签 (仅闲逛时显示)
-        if(this.state==='wander'&&d>100) {
-            ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='8px sans-serif';
-            ctx.fillText('闲逛',sx-10,by-4);
-        }
     }
     drawEyes(ctx,sx,sy) {
         ctx.fillStyle='#fff';
@@ -373,6 +424,11 @@ class Pickup {
         this.x=x; this.y=y; this.type=type; this.value=value;
         this.size=type==='gold'?10:type==='item'?16:12; this.dead=false;
         this.life=type==='item'?15:25; this.anim=rand(0,Math.PI*2);
+        this.sprite=null;
+        if (type==='item') {
+            const imgKey='item'+(value==='bomb'?'Bomb':value==='power'?'Power':'Heal');
+            this.sprite=Assets.getSprite(imgKey);
+        }
     }
     update(dt, player, magnetRange, game) {
         this.life-=dt; if(this.life<=0) { this.dead=true; return; }
@@ -394,20 +450,19 @@ class Pickup {
     draw(ctx, cam) {
         const sx=this.x-cam.x, sy=this.y-cam.y;
         const floatY=Math.sin(Date.now()/200+this.anim)*3;
-        const imgKey=this.type==='item'?('itemPower'):null;
-        const img=imgKey?Assets.get(imgKey):null;
-        if(this.type==='item'&&img&&img.complete) {
-            ctx.drawImage(img, sx-12, sy-12+floatY, 24, 24);
+        if (this.sprite) {
+            const s=18;
+            ctx.drawImage(this.sprite, sx-s, sy-s+floatY, s*2, s*2);
         } else {
             ctx.fillStyle=this.type==='xp'?'#4f4':this.type==='item'?'#c8a84e':'#fc0';
             ctx.shadowColor=this.type==='xp'?'#4f4':this.type==='item'?'#c8a84e':'#fc0';
             ctx.shadowBlur=8;
             ctx.beginPath(); ctx.arc(sx,sy+floatY,this.size/2,0,Math.PI*2); ctx.fill();
             ctx.shadowBlur=0;
-            ctx.fillStyle='#fff'; ctx.font='9px sans-serif';
-            ctx.fillText(this.type==='xp'?'XP':this.type==='item'?'★':'$',sx-5,sy+floatY+3);
+            ctx.fillStyle='#fff'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+            ctx.fillText(this.type==='xp'?'XP':this.type==='item'?'*':'$',sx,sy+floatY+3);
+            ctx.textAlign='start';
         }
-        // 道具闪光
         if(this.type==='item') {
             ctx.strokeStyle='rgba(200,168,78,0.6)'; ctx.lineWidth=2;
             ctx.beginPath(); ctx.arc(sx,sy+floatY,this.size/2+3,0,Math.PI*2); ctx.stroke();
@@ -419,13 +474,12 @@ class Pickup {
 class SkillEffect {
     constructor(type) {
         this.type=type; this.timer=0; this.duration=1.2; this.dead=false;
-        this.scale=0; this.alpha=1; this.particles=[];
+        this.scale=0; this.alpha=1;
     }
     update(dt, game) {
         this.timer+=dt;
         this.scale=Math.min(1, this.timer/0.3);
         if(this.timer>this.duration*0.5) this.alpha=1-(this.timer-this.duration*0.5)/(this.duration*0.5);
-        // 生成粒子
         if(this.timer<0.5) {
             for(let i=0;i<3;i++) {
                 const a=rand(0,Math.PI*2);
@@ -443,7 +497,6 @@ class SkillEffect {
         const maxR=Math.max(window._game.canvas.width,window._game.canvas.height)*0.8;
         const r=maxR*easeOut(this.scale);
         ctx.globalAlpha=this.alpha*0.5;
-        // 外圈
         const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
         if(this.type==='bomb') {
             grad.addColorStop(0,'rgba(255,100,0,0.8)');
@@ -458,7 +511,6 @@ class SkillEffect {
         }
         ctx.fillStyle=grad;
         ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
-        // 内圈闪光
         ctx.globalAlpha=this.alpha*0.8;
         ctx.strokeStyle=this.type==='bomb'?'#ffaa00':'#c0a0ff';
         ctx.lineWidth=4;
@@ -470,19 +522,14 @@ function easeOut(t) { return 1-Math.pow(1-t,3); }
 
 // ==================== 武器系统 ====================
 class WeaponSystem {
-    constructor() {
-        this.weapons = {};
-    }
+    constructor() { this.weapons = {}; }
     hasWeapon(id) { return !!this.weapons[id]; }
     getLevel(id) { return this.weapons[id]?this.weapons[id].level:0; }
     addWeapon(id) {
         if(this.weapons[id]) {
-            const cfg=CFG.WEAPONS[id];
-            if(this.weapons[id].level>=cfg.maxLv) return false;
+            if(this.weapons[id].level>=CFG.WEAPONS[id].maxLv) return false;
             this.weapons[id].level++;
-        } else {
-            this.weapons[id]={level:1};
-        }
+        } else { this.weapons[id]={level:1}; }
         return true;
     }
     getWeaponIds() { return Object.keys(this.weapons); }
@@ -503,8 +550,7 @@ class WeaponSystem {
         }
     }
     updateSoulBlade(dt, player, game, w, lv) {
-        if(!w.cooldown) w.cooldown=0;
-        w.cooldown-=dt;
+        if(!w.cooldown) w.cooldown=0; w.cooldown-=dt;
         const cd=Math.max(0.3,1.2-lv*0.1);
         if(w.cooldown<=0) {
             w.cooldown=cd;
@@ -515,18 +561,16 @@ class WeaponSystem {
             const spread=lv>=4?0.5:0.3;
             for(let i=0;i<arcCount;i++) {
                 const aa=a+(i-Math.floor(arcCount/2))*spread;
-                const dmg=player.getDamage()*(0.8+lv*0.3);
                 const proj=new Projectile(
                     player.x+Math.cos(aa)*player.size,player.y+Math.sin(aa)*player.size,
-                    Math.cos(aa)*10,Math.sin(aa)*10,dmg,16+lv*2,'#c8a84e',lv>=6?4:lv>=4?2:1
+                    Math.cos(aa)*10,Math.sin(aa)*10,player.getDamage()*(0.8+lv*0.3),16+lv*2,'#c8a84e',lv>=6?4:lv>=4?2:1
                 );
                 game.projectiles.push(proj);
             }
         }
     }
     updateShadowBolt(dt, player, game, w, lv) {
-        if(!w.cooldown) w.cooldown=0;
-        w.cooldown-=dt;
+        if(!w.cooldown) w.cooldown=0; w.cooldown-=dt;
         const cd=Math.max(0.3,0.9-lv*0.08);
         if(w.cooldown<=0) {
             w.cooldown=cd;
@@ -534,20 +578,16 @@ class WeaponSystem {
             const baseAngle=Date.now()/1000*(lv>=4?2:1);
             for(let i=0;i<count;i++) {
                 const a=baseAngle+(i/count)*Math.PI*2;
-                const dmg=player.getDamage()*(0.5+lv*0.15);
-                const proj=new Projectile(player.x,player.y,Math.cos(a)*8,Math.sin(a)*8,dmg,8+lv,'#8b5cf6',1);
-                game.projectiles.push(proj);
+                game.projectiles.push(new Projectile(player.x,player.y,Math.cos(a)*8,Math.sin(a)*8,player.getDamage()*(0.5+lv*0.15),8+lv,'#8b5cf6',1));
             }
         }
     }
     updateDeathAura(dt, player, game, w, lv) {
-        if(!w.timer) w.timer=0;
-        w.timer-=dt;
+        if(!w.timer) w.timer=0; w.timer-=dt;
         if(w.timer<=0) {
             w.timer=0.15;
             const radius=60+lv*12;
-            const dmg=player.getDamage()*(0.3+lv*0.1);
-            game.enemies.forEach(e=>{if(dist(e,player)<radius) e.takeDamage(dmg*dt*60,game);});
+            game.enemies.forEach(e=>{if(dist(e,player)<radius) e.takeDamage(player.getDamage()*(0.3+lv*0.1)*dt*60,game);});
         }
         w.visualAngle=(w.visualAngle||0)+dt*2;
         for(let i=0;i<3+lv;i++) {
@@ -557,35 +597,32 @@ class WeaponSystem {
         }
     }
     updateHellfire(dt, player, game, w, lv) {
-        if(!w.cooldown) w.cooldown=0;
-        w.cooldown-=dt;
+        if(!w.cooldown) w.cooldown=0; w.cooldown-=dt;
         const cd=Math.max(0.5,2.5-lv*0.3);
         if(w.cooldown<=0) {
             w.cooldown=cd;
             const count=lv>=5?5:lv>=3?3:2;
             for(let i=0;i<count;i++) {
                 const tx=player.x+rand(-200,200),ty=player.y+rand(-200,200);
-                const radius=30+lv*8, dmg=player.getDamage()*(0.8+lv*0.25);
-                game.enemies.forEach(e=>{if(dist(e,{x:tx,y:ty})<radius) e.takeDamage(dmg,game);});
+                const radius=30+lv*8;
+                game.enemies.forEach(e=>{if(dist(e,{x:tx,y:ty})<radius) e.takeDamage(player.getDamage()*(0.8+lv*0.25),game);});
                 for(let j=0;j<12;j++) game.particles.push(new Particle(tx+rand(-radius,radius),ty+rand(-radius,radius),
                     {vx:rand(-2,2),vy:rand(-4,-1),color:'#ff6600',life:0.6,size:rand(3,6)}));
             }
         }
     }
     updateLightning(dt, player, game, w, lv) {
-        if(!w.cooldown) w.cooldown=0;
-        w.cooldown-=dt;
+        if(!w.cooldown) w.cooldown=0; w.cooldown-=dt;
         const cd=Math.max(0.3,1.5-lv*0.15);
         if(w.cooldown<=0) {
             w.cooldown=cd;
             const chainCount=lv>=5?6:lv>=3?4:2;
-            const dmg=player.getDamage()*(0.6+lv*0.2);
             let last=player; const hit=new Set();
             for(let c=0;c<chainCount;c++) {
                 let nearest=null,minD=250;
                 game.enemies.forEach(e=>{if(hit.has(e))return;const d=dist(e,last);if(d<minD){minD=d;nearest=e;}});
                 if(!nearest)break;
-                hit.add(nearest); nearest.takeDamage(dmg,game);
+                hit.add(nearest); nearest.takeDamage(player.getDamage()*(0.6+lv*0.2),game);
                 for(let i=0;i<6;i++) game.particles.push(new Particle(lerp(last.x,nearest.x,i/6),lerp(last.y,nearest.y,i/6),
                     {vx:0,vy:0,color:'#ffcc00',life:0.2,size:3}));
                 last=nearest;
@@ -593,13 +630,12 @@ class WeaponSystem {
         }
     }
     updateFrostNova(dt, player, game, w, lv) {
-        if(!w.cooldown) w.cooldown=0;
-        w.cooldown-=dt;
+        if(!w.cooldown) w.cooldown=0; w.cooldown-=dt;
         const cd=Math.max(0.8,5-lv*0.5);
         if(w.cooldown<=0) {
             w.cooldown=cd;
-            const radius=80+lv*20,dmg=player.getDamage()*(0.5+lv*0.2);
-            game.enemies.forEach(e=>{if(dist(e,player)<radius){e.takeDamage(dmg,game);e.slowTimer=1.5+lv*0.3;}});
+            const radius=80+lv*20;
+            game.enemies.forEach(e=>{if(dist(e,player)<radius){e.takeDamage(player.getDamage()*(0.5+lv*0.2),game);e.slowTimer=1.5+lv*0.3;}});
             for(let i=0;i<20;i++){const a=rand(0,Math.PI*2),r=rand(0,radius);
                 game.particles.push(new Particle(player.x+Math.cos(a)*r,player.y+Math.sin(a)*r,
                 {vx:Math.cos(a)*rand(1,3),vy:Math.sin(a)*rand(1,3),color:'#66ccff',life:0.5,size:rand(2,5)}));}
@@ -626,7 +662,7 @@ class Player {
         this.weapons=new WeaponSystem(); this.weapons.addWeapon('soulBlade');
         this.facingDir=0; this.moveX=0; this.moveY=0;
         this.animFrame=0; this.animTimer=0; this.isMoving=false;
-        this.img=Assets.get('player');
+        this.sprite=Assets.getSprite('player');
     }
     getTotalHp() { return this.maxHp+this.bonusHp; }
     getDamage() { return this.baseDmg+this.bonusDmg; }
@@ -697,14 +733,14 @@ class Player {
         if(this.invulnTimer>0&&Math.floor(this.invulnTimer*30)%2===0) return;
         const drawSize=this.size*2.8;
         const dx=sx-drawSize/2, dy=sy-drawSize/2;
-        if(this.img&&this.img.complete) {
-            // 使用AI精灵图
-            const frameW=this.img.width/4;
-            const srcX=this.animFrame*frameW;
+        if (this.sprite) {
+            // 绿幕抠图后的精灵动画
+            const frameW = this.sprite.width / 4;
+            const srcX = this.animFrame * frameW;
             ctx.save();
-            ctx.translate(sx,sy);
-            if(this.isMoving) ctx.rotate(this.facingDir+Math.PI/2);
-            ctx.drawImage(this.img, srcX,0,frameW,this.img.height, -drawSize/2,-drawSize/2,drawSize,drawSize);
+            ctx.translate(sx, sy);
+            if (this.isMoving) ctx.rotate(this.facingDir + Math.PI/2);
+            ctx.drawImage(this.sprite, srcX, 0, frameW, this.sprite.height, -drawSize/2, -drawSize/2, drawSize, drawSize);
             ctx.restore();
         } else {
             // 回退绘制
@@ -735,7 +771,6 @@ const Input = {
             this.keys[e.key.toLowerCase()]=true;
             if(e.key==='Escape') { e.preventDefault(); window._game?.togglePause(); }
             if(e.key===' ') e.preventDefault();
-            // 数字键使用道具
             if(e.key==='1') window._game?.useItem(0);
             if(e.key==='2') window._game?.useItem(1);
             if(e.key==='3') window._game?.useItem(2);
@@ -802,11 +837,10 @@ class Game {
         this.cam={x:0,y:0}; this.shake=0;
         this.enemySpawnTimer=0; this.difficulty=1;
         this.bossSpawned=false;
-        // 道具系统
-        this.items=[]; // 背包道具 ['bomb','heal','power']
-        this.maxItems=3;
+        this.items=[]; this.maxItems=3;
         this.itemCooldowns={bomb:0,power:0,heal:0};
         this.skillEffects=[];
+        this.bgCache=null;
         window._game=this;
     }
     init() {
@@ -816,30 +850,29 @@ class Game {
         this.setupUI();
         this.generateBg();
     }
-    resize() { this.canvas.width=window.innerWidth; this.canvas.height=window.innerHeight; }
+    resize() { this.canvas.width=window.innerWidth; this.canvas.height=window.innerHeight; this.generateBg(); }
     generateBg() {
-        // 用AI背景图生成tiled背景
-        const bgImg=Assets.get('bg');
-        const bgCanvas=document.createElement('canvas');
-        bgCanvas.width=CFG.MAP_W; bgCanvas.height=CFG.MAP_H;
-        const bgCtx=bgCanvas.getContext('2d');
-        bgCtx.fillStyle='#0d1117'; bgCtx.fillRect(0,0,CFG.MAP_W,CFG.MAP_H);
-        if(bgImg&&bgImg.complete) {
-            const tileSize=512;
-            for(let x=0;x<CFG.MAP_W;x+=tileSize) {
-                for(let y=0;y<CFG.MAP_H;y+=tileSize) {
-                    bgCtx.drawImage(bgImg, x,y,tileSize,tileSize);
-                }
-            }
-            // 暗化覆盖
-            bgCtx.fillStyle='rgba(0,0,0,0.55)'; bgCtx.fillRect(0,0,CFG.MAP_W,CFG.MAP_H);
-        } else {
-            // 回退：程序化背景
-            bgCtx.strokeStyle='rgba(255,255,255,0.03)'; bgCtx.lineWidth=1;
-            for(let x=0;x<CFG.MAP_W;x+=64) { bgCtx.beginPath(); bgCtx.moveTo(x,0); bgCtx.lineTo(x,CFG.MAP_H); bgCtx.stroke(); }
-            for(let y=0;y<CFG.MAP_H;y+=64) { bgCtx.beginPath(); bgCtx.moveTo(0,y); bgCtx.lineTo(CFG.MAP_W,y); bgCtx.stroke(); }
+        const bgImg=Assets.getRaw('bgTile');
+        if (!bgImg || !bgImg.complete) {
+            // 回退：纯色背景
+            this.bgCache = null;
+            return;
         }
-        this.bgImage=bgCanvas;
+        // 生成无缝平铺背景
+        const bgCanvas = document.createElement('canvas');
+        bgCanvas.width = CFG.MAP_W;
+        bgCanvas.height = CFG.MAP_H;
+        const bgCtx = bgCanvas.getContext('2d');
+        const tileSize = 512;
+        for (let x = 0; x < CFG.MAP_W; x += tileSize) {
+            for (let y = 0; y < CFG.MAP_H; y += tileSize) {
+                bgCtx.drawImage(bgImg, x, y, tileSize, tileSize);
+            }
+        }
+        // 暗化覆盖层
+        bgCtx.fillStyle = 'rgba(0,0,0,0.5)';
+        bgCtx.fillRect(0, 0, CFG.MAP_W, CFG.MAP_H);
+        this.bgCache = bgCanvas;
     }
     start() {
         this.running=true; this.paused=false;
@@ -871,21 +904,17 @@ class Game {
         const p=this.player;
         if(!p||p.dead) return;
         p.update(dt);
-        // 技能特效
         for(let i=this.skillEffects.length-1;i>=0;i--) {
             this.skillEffects[i].update(dt,this);
             if(this.skillEffects[i].dead) this.skillEffects.splice(i,1);
         }
-        // 道具冷却
         for(const k in this.itemCooldowns) {
             if(this.itemCooldowns[k]>0) this.itemCooldowns[k]-=dt;
         }
-        // 敌人
         for(let i=this.enemies.length-1;i>=0;i--) {
             this.enemies[i].update(dt,p);
             if(this.enemies[i].dead) this.enemies.splice(i,1);
         }
-        // 投射物
         for(let i=this.projectiles.length-1;i>=0;i--) {
             this.projectiles[i].update(dt);
             const proj=this.projectiles[i];
@@ -898,17 +927,14 @@ class Game {
                 }
             }
         }
-        // 粒子
         for(let i=this.particles.length-1;i>=0;i--) {
             this.particles[i].update(dt);
             if(this.particles[i].dead) this.particles.splice(i,1);
         }
-        // 拾取物
         for(let i=this.pickups.length-1;i>=0;i--) {
             this.pickups[i].update(dt,p,p.getMagnetRange(),this);
             if(this.pickups[i].dead) this.pickups.splice(i,1);
         }
-        // 玩家碰撞
         if(p.contactDmgTimer<=0) {
             for(const e of this.enemies) {
                 if(dist(e,p)<(e.size+p.size)/2) {
@@ -916,7 +942,6 @@ class Game {
                 }
             }
         }
-        // 敌人刷新
         this.enemySpawnTimer-=dt;
         if(this.enemySpawnTimer<=0) {
             this.spawnWave();
@@ -972,7 +997,6 @@ class Game {
         for(const e of this.enemies) { const d=dist(e,{x,y}); if(d<minD) { minD=d; nearest=e; } }
         return nearest;
     }
-    // ========== 道具系统 ==========
     collectItem(type) {
         if(this.items.length>=this.maxItems) return;
         this.items.push(type);
@@ -987,27 +1011,22 @@ class Game {
         this.itemCooldowns[type]=cfg.cooldown;
         switch(cfg.skill) {
             case 'bomb':
-                // 全屏爆炸伤害
                 this.skillEffects.push(new SkillEffect('bomb'));
                 for(const e of this.enemies) {
-                    const dmg=this.player?this.player.getDamage()*5:50;
-                    e.takeDamage(dmg,this);
+                    e.takeDamage(this.player?this.player.getDamage()*5:50,this);
                 }
                 break;
             case 'ult':
-                // 全屏暗影爆发
                 this.skillEffects.push(new SkillEffect('ult'));
                 for(const e of this.enemies) {
-                    const dmg=this.player?this.player.getDamage()*3:30;
-                    e.takeDamage(dmg,this);
-                    e.stunTimer=5; // 5秒眩晕
+                    e.takeDamage(this.player?this.player.getDamage()*3:30,this);
+                    e.stunTimer=5;
                 }
                 break;
             case 'heal':
                 if(this.player) {
                     this.player.hp=Math.min(this.player.getTotalHp(),this.player.hp+this.player.getTotalHp()*0.5);
                 }
-                // 治疗粒子
                 for(let i=0;i<30;i++) {
                     this.particles.push(new Particle(this.player.x,this.player.y,{
                         vx:rand(-3,3),vy:rand(-3,3),color:'#44ff44',life:1,size:rand(3,6)
@@ -1029,30 +1048,46 @@ class Game {
                 const cfg=CFG.ITEM_TYPES[type];
                 const onCd=this.itemCooldowns[type]>0;
                 slot.className+=' item-filled'+(onCd?' item-cooldown':'');
-                const img=Assets.get('item'+(type==='bomb'?'Bomb':type==='power'?'Power':'Heal'));
-                if(img&&img.complete) {
-                    slot.innerHTML=`<img src="${img.src}" class="item-img"><span class="item-key">${i+1}</span>`;
+                const imgKey='item'+(type==='bomb'?'Bomb':type==='power'?'Power':'Heal');
+                const sprite=Assets.getSprite(imgKey);
+                if(sprite) {
+                    const img=document.createElement('img');
+                    img.src=sprite.toDataURL();
+                    img.className='item-img';
+                    slot.appendChild(img);
                 } else {
-                    slot.innerHTML=`<span class="item-icon">${cfg.icon}</span><span class="item-key">${i+1}</span>`;
+                    const txt=document.createElement('span');
+                    txt.className='item-text';
+                    txt.textContent=cfg.name.charAt(0);
+                    slot.appendChild(txt);
                 }
+                const key=document.createElement('span');
+                key.className='item-key';
+                key.textContent=String(i+1);
+                slot.appendChild(key);
                 if(onCd) {
-                    slot.innerHTML+=`<span class="item-cd">${this.itemCooldowns[type].toFixed(1)}s</span>`;
+                    const cd=document.createElement('span');
+                    cd.className='item-cd';
+                    cd.textContent=this.itemCooldowns[type].toFixed(1)+'s';
+                    slot.appendChild(cd);
                 }
                 slot.onclick=()=>this.useItem(i);
                 slot.title=cfg.name+': '+cfg.desc;
             } else {
                 slot.className+=' item-empty';
-                slot.innerHTML='<span class="item-key">'+(i+1)+'</span>';
+                const key=document.createElement('span');
+                key.className='item-key';
+                key.textContent=String(i+1);
+                slot.appendChild(key);
             }
             container.appendChild(slot);
         }
     }
-    // ========== 渲染 ==========
     render() {
         const ctx=this.ctx;
         ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-        if(this.bgImage) {
-            ctx.drawImage(this.bgImage, this.cam.x,this.cam.y,this.canvas.width,this.canvas.height, 0,0,this.canvas.width,this.canvas.height);
+        if (this.bgCache) {
+            ctx.drawImage(this.bgCache, this.cam.x, this.cam.y, this.canvas.width, this.canvas.height, 0, 0, this.canvas.width, this.canvas.height);
         } else {
             ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
         }
@@ -1094,8 +1129,8 @@ class Game {
         opts.forEach(opt=>{
             const div=document.createElement('div');
             div.className='option-btn';
-            const rarityLabel=opt.rarity?` [${opt.rarity==='rare'?'稀有':'罕见'}]`:'';
-            div.innerHTML=`<span class="op-name">${opt.icon} ${opt.name}${rarityLabel}</span><span class="op-desc">${opt.desc}</span>`;
+            const rarityLabel=opt.rarity?(' ['+(opt.rarity==='rare'?'稀有':'罕见')+']'):'';
+            div.innerHTML='<span class="op-name">'+opt.name+rarityLabel+'</span><span class="op-desc">'+opt.desc+'</span>';
             div.onclick=()=>{this.player.applyUpgrade(opt);document.getElementById('levelUpScreen').classList.add('hidden');this.paused=false;};
             container.appendChild(div);
         });
@@ -1143,7 +1178,7 @@ class Game {
         document.getElementById('btnStart').onclick=()=>{
             document.getElementById('mainMenu').classList.add('hidden');
             document.getElementById('gameScreen').classList.remove('hidden');
-            this.generateBg(); // 重新生成背景(图片已加载)
+            this.generateBg();
             this.start();
         };
         document.getElementById('btnUpgrade').onclick=()=>this.showPermUpgrades();
@@ -1187,7 +1222,7 @@ class Game {
             const lv=DB.getPermLv(key), maxed=lv>=cfg.maxLv, cost=DB.getPermCost(key);
             const div=document.createElement('div');
             div.className='upgrade-item';
-            div.innerHTML=`<div class="ui-info"><div class="ui-name">${cfg.name} Lv.${lv}/${cfg.maxLv}</div><div class="ui-desc">${cfg.desc}</div></div>${maxed?`<span class="ui-maxed">已满级</span>`:`<button class="ui-btn">💰 ${cost}</button>`}`;
+            div.innerHTML='<div class="ui-info"><div class="ui-name">'+cfg.name+' Lv.'+lv+'/'+cfg.maxLv+'</div><div class="ui-desc">'+cfg.desc+'</div></div>'+(maxed?'<span class="ui-maxed">已满级</span>':'<button class="ui-btn">'+cost+' G</button>');
             if(!maxed) div.querySelector('.ui-btn').onclick=()=>{if(DB.upgradePerm(key)){this.showPermUpgrades();this.updateMenuStats();}else alert('金币不足!');};
             container.appendChild(div);
         }
@@ -1212,10 +1247,9 @@ window.GM = {
 // ==================== 启动 ====================
 DB.init();
 const game = new Game();
-// 先显示加载进度
 const loadOverlay=document.createElement('div');
 loadOverlay.id='loadOverlay';
-loadOverlay.innerHTML='<div class="load-content"><div class="load-spinner"></div><p>加载资源中...</p><div class="load-bar"><div id="loadBar" class="load-bar-fill"></div></div></div>';
+loadOverlay.innerHTML='<div class="load-content"><div class="load-spinner"></div><p>资源加载中...</p><div class="load-bar"><div id="loadBar" class="load-bar-fill"></div></div></div>';
 document.body.appendChild(loadOverlay);
 
 Assets.loadAll().then(()=>{
@@ -1225,10 +1259,10 @@ Assets.loadAll().then(()=>{
     document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 });
 
-// 加载进度更新
 const progressInterval=setInterval(()=>{
     const p=Assets.progress();
-    document.getElementById('loadBar').style.width=(p*100)+'%';
+    const bar=document.getElementById('loadBar');
+    if(bar) bar.style.width=(p*100)+'%';
     if(p>=1) clearInterval(progressInterval);
 },100);
 

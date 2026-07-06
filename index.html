@@ -19,9 +19,9 @@
                 <p class="game-desc">幸存者风格 · 暗黑三国</p>
             </div>
             <div class="menu-stats">
-                <div class="mstat"><span class="ms-icon">🏆</span>最高分:<span id="mHighScore">0</span></div>
-                <div class="mstat"><span class="ms-icon">💰</span>金币:<span id="mGold">0</span></div>
-                <div class="mstat"><span class="ms-icon">💀</span>总击杀:<span id="mTotalKills">0</span></div>
+                <div class="mstat"><span class="ms-label">最高分</span><span id="mHighScore">0</span></div>
+                <div class="mstat"><span class="ms-label">金币</span><span id="mGold">0</span></div>
+                <div class="mstat"><span class="ms-label">总击杀</span><span id="mTotalKills">0</span></div>
             </div>
             <div class="menu-btns">
                 <button id="btnStart" class="btn-primary">开始战斗</button>
@@ -40,9 +40,9 @@
                 <div class="hud-xp-bar"><div id="hudXpBar" class="hud-xp-fill"></div><span>Lv.<span id="hudLevel">1</span></span></div>
             </div>
             <div class="hud-info">
-                <span>⏱<span id="hudTime">0:00</span></span>
-                <span>💀<span id="hudKills">0</span></span>
-                <span>⭐<span id="hudScore">0</span></span>
+                <span>T:<span id="hudTime">0:00</span></span>
+                <span>K:<span id="hudKills">0</span></span>
+                <span>S:<span id="hudScore">0</span></span>
             </div>
             <!-- 道具背包栏 -->
             <div class="item-bar" id="itemSlots"></div>
@@ -53,14 +53,14 @@
                     <div class="joystick-knob" id="joystickKnob"></div>
                 </div>
             </div>
-            <button id="btnPause" class="btn-pause">⏸</button>
+            <button id="btnPause" class="btn-pause">||</button>
         </div>
     </div>
 
     <!-- 升级选择 -->
     <div id="levelUpScreen" class="overlay hidden">
         <div class="overlay-card">
-            <h2 class="overlay-title">⚔️ 升级！选择强化 ⚔️</h2>
+            <h2 class="overlay-title">升级！选择强化</h2>
             <div id="levelUpOptions" class="options-grid"></div>
         </div>
     </div>
@@ -68,13 +68,13 @@
     <!-- 游戏结束 -->
     <div id="gameOverScreen" class="overlay hidden">
         <div class="overlay-card">
-            <h2 class="overlay-title death-title">💀 力竭而亡 💀</h2>
+            <h2 class="overlay-title death-title">力竭而亡</h2>
             <div class="go-stats">
-                <p>🏆 得分: <span id="goScore">0</span></p>
-                <p>💀 击杀: <span id="goKills">0</span></p>
-                <p>⏱ 存活: <span id="goTime">0:00</span></p>
-                <p>📈 等级: <span id="goLevel">1</span></p>
-                <p class="go-reward">💰 获得金币: +<span id="goGold">0</span></p>
+                <p>得分: <span id="goScore">0</span></p>
+                <p>击杀: <span id="goKills">0</span></p>
+                <p>存活: <span id="goTime">0:00</span></p>
+                <p>等级: <span id="goLevel">1</span></p>
+                <p class="go-reward">获得金币: +<span id="goGold">0</span></p>
             </div>
             <div class="go-btns">
                 <button id="btnRestart" class="btn-primary">再来一局</button>
@@ -86,7 +86,7 @@
     <!-- 暂停 -->
     <div id="pauseScreen" class="overlay hidden">
         <div class="overlay-card">
-            <h2 class="overlay-title">⏸ 暂停</h2>
+            <h2 class="overlay-title">暂停</h2>
             <div class="go-btns">
                 <button id="btnResume" class="btn-primary">继续战斗</button>
                 <button id="btnQuit" class="btn-secondary">返回主菜单</button>
@@ -97,8 +97,8 @@
     <!-- 永久强化 -->
     <div id="upgradeScreen" class="overlay hidden">
         <div class="overlay-card wide-card">
-            <h2 class="overlay-title">⬆ 永久强化</h2>
-            <p class="upgrade-gold">💰 金币: <span id="upGold">0</span></p>
+            <h2 class="overlay-title">永久强化</h2>
+            <p class="upgrade-gold">金币: <span id="upGold">0</span></p>
             <div id="upgradeList" class="upgrade-list"></div>
             <button id="btnCloseUpgrade" class="btn-close">关闭</button>
         </div>
@@ -107,7 +107,7 @@
     <!-- GM后台 -->
     <div id="gmScreen" class="overlay hidden">
         <div class="overlay-card wide-card">
-            <h2 class="overlay-title">🔧 GM后台</h2>
+            <h2 class="overlay-title">GM后台</h2>
             <div class="gm-section">
                 <div class="gm-row"><label>金币:</label><input id="gmGold" type="number"><button onclick="GM.setGold()">设置</button><button onclick="GM.addGold(99999)">+99999</button></div>
                 <div class="gm-row"><button onclick="GM.resetAll()" class="btn-danger">重置所有数据</button><button onclick="GM.maxUpgrades()">满级强化</button><button onclick="GM.unlockAll()">解锁全部</button></div>
