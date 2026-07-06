@@ -83,6 +83,15 @@ const IMG = {
     itemHeal: 'assets/images/ai_item_heal.jpg',
 };
 
+// ==================== 性能上限 ====================
+const LIMITS = {
+    ENEMIES: 200,
+    PARTICLES: 300,
+    PICKUPS: 120,
+    PROJECTILES: 300,
+    SKILL_EFFECTS: 10,
+};
+
 // ==================== 配置 ====================
 const CFG = {
     MAP_W: 3600, MAP_H: 3600,
@@ -359,20 +368,33 @@ class Enemy {
             }));
         }
     }
-    draw(ctx, cam) {
+    draw(ctx, cam, player) {
         const sx=this.x-cam.x, sy=this.y-cam.y;
         const floatY=Math.sin(Date.now()/300+this.anim)*2;
         const drawSize=this.size*2.5;
         const dx=sx-drawSize/2, dy=sy-drawSize/2+floatY;
         if (this.sprite) {
+            ctx.save();
+            ctx.translate(sx, sy+floatY);
+            // 敌人面朝玩家方向
+            if (player) {
+                const enemyAngle = Math.atan2(player.y - this.y, player.x - this.x);
+                ctx.rotate(enemyAngle - Math.PI/2);
+            }
+            // 保持宽高比不变形
+            const eAspect = this.sprite.width / this.sprite.height;
+            let edw = drawSize, edh = drawSize;
+            if (eAspect > 1) edh = drawSize / eAspect;
+            else edw = drawSize * eAspect;
             // 绿幕抠图后的精灵渲染
             if (this.hitFlash>0) {
                 ctx.globalAlpha = 0.5;
-                ctx.drawImage(this.sprite, dx, dy, drawSize, drawSize);
+                ctx.drawImage(this.sprite, -edw/2, -edh/2, edw, edh);
                 ctx.globalAlpha = 1;
             } else {
-                ctx.drawImage(this.sprite, dx, dy, drawSize, drawSize);
+                ctx.drawImage(this.sprite, -edw/2, -edh/2, edw, edh);
             }
+            ctx.restore();
         } else {
             // 回退几何绘制
             const color=this.hitFlash>0?'#fff':this.color;
@@ -734,13 +756,18 @@ class Player {
         const drawSize=this.size*2.8;
         const dx=sx-drawSize/2, dy=sy-drawSize/2;
         if (this.sprite) {
-            // 绿幕抠图后的精灵动画
+            // 绿幕抠图后的精灵动画 - 保持宽高比不变形
             const frameW = this.sprite.width / 4;
             const srcX = this.animFrame * frameW;
+            const frameH = this.sprite.height;
+            const aspect = frameW / frameH;
+            let dw = drawSize, dh = drawSize;
+            if (aspect > 1) dh = drawSize / aspect;
+            else dw = drawSize * aspect;
             ctx.save();
             ctx.translate(sx, sy);
-            if (this.isMoving) ctx.rotate(this.facingDir + Math.PI/2);
-            ctx.drawImage(this.sprite, srcX, 0, frameW, this.sprite.height, -drawSize/2, -drawSize/2, drawSize, drawSize);
+            ctx.rotate(this.facingDir - Math.PI/2);
+            ctx.drawImage(this.sprite, srcX, 0, frameW, frameH, -dw/2, -dh/2, dw, dh);
             ctx.restore();
         } else {
             // 回退绘制
@@ -883,6 +910,7 @@ class Game {
         this.cam={x:CFG.MAP_W/2-this.canvas.width/2, y:CFG.MAP_H/2-this.canvas.height/2};
         this.shake=0; this.enemySpawnTimer=0; this.difficulty=1; this.bossSpawned=false;
         this.player=new Player(DB.data.permUpgrades);
+        this._itemBarDirty = true;
         this.lastTime=performance.now();
         this.updateItemBar();
         this.loop();
@@ -904,17 +932,23 @@ class Game {
         const p=this.player;
         if(!p||p.dead) return;
         p.update(dt);
+        // 技能特效
         for(let i=this.skillEffects.length-1;i>=0;i--) {
             this.skillEffects[i].update(dt,this);
             if(this.skillEffects[i].dead) this.skillEffects.splice(i,1);
         }
+        if(this.skillEffects.length>LIMITS.SKILL_EFFECTS) this.skillEffects.splice(0,this.skillEffects.length-LIMITS.SKILL_EFFECTS);
+        // 道具冷却
         for(const k in this.itemCooldowns) {
             if(this.itemCooldowns[k]>0) this.itemCooldowns[k]-=dt;
         }
+        // 敌人
         for(let i=this.enemies.length-1;i>=0;i--) {
             this.enemies[i].update(dt,p);
             if(this.enemies[i].dead) this.enemies.splice(i,1);
         }
+        if(this.enemies.length>LIMITS.ENEMIES) this.enemies.splice(0,this.enemies.length-LIMITS.ENEMIES);
+        // 投射物
         for(let i=this.projectiles.length-1;i>=0;i--) {
             this.projectiles[i].update(dt);
             const proj=this.projectiles[i];
@@ -927,14 +961,20 @@ class Game {
                 }
             }
         }
+        if(this.projectiles.length>LIMITS.PROJECTILES) this.projectiles.splice(0,this.projectiles.length-LIMITS.PROJECTILES);
+        // 粒子
         for(let i=this.particles.length-1;i>=0;i--) {
             this.particles[i].update(dt);
             if(this.particles[i].dead) this.particles.splice(i,1);
         }
+        if(this.particles.length>LIMITS.PARTICLES) this.particles.splice(0,this.particles.length-LIMITS.PARTICLES);
+        // 掉落物
         for(let i=this.pickups.length-1;i>=0;i--) {
             this.pickups[i].update(dt,p,p.getMagnetRange(),this);
             if(this.pickups[i].dead) this.pickups.splice(i,1);
         }
+        if(this.pickups.length>LIMITS.PICKUPS) this.pickups.splice(0,this.pickups.length-LIMITS.PICKUPS);
+        // 接触伤害
         if(p.contactDmgTimer<=0) {
             for(const e of this.enemies) {
                 if(dist(e,p)<(e.size+p.size)/2) {
@@ -942,14 +982,15 @@ class Game {
                 }
             }
         }
+        // 敌人生成 - 有上限保护
         this.enemySpawnTimer-=dt;
-        if(this.enemySpawnTimer<=0) {
+        if(this.enemySpawnTimer<=0&&this.enemies.length<LIMITS.ENEMIES) {
             this.spawnWave();
-            this.enemySpawnTimer=Math.max(0.5,2.5-this.time/300);
+            this.enemySpawnTimer=Math.max(0.8,3.0-this.time/300);
         }
         this.difficulty=1+this.time/60;
         const mins=Math.floor(this.time/60);
-        if(mins>0&&mins%3===0&&!this.bossSpawned) {
+        if(mins>0&&mins%3===0&&!this.bossSpawned&&this.enemies.length<LIMITS.ENEMIES-5) {
             this.bossSpawned=true; this.spawnEnemy('boss',3);
         }
         if(mins%3!==0) this.bossSpawned=false;
@@ -961,10 +1002,12 @@ class Game {
             this.cam.y+=Math.cos(this.shake*50)*5*this.shake;
         }
         if(p.dead) this.gameOver();
+        // 优化：HUD信息每帧更新（轻量），道具栏仅在变化时重建
         this.updateHUD();
     }
     spawnWave() {
-        const count=Math.floor(2+this.time/25);
+        const remaining=Math.max(0,LIMITS.ENEMIES-this.enemies.length);
+        const count=Math.min(remaining, Math.floor(2+this.time/25));
         for(let i=0;i<count;i++) {
             const types=['wraith','skeleton','zombie','demon'];
             const weights=this.time<30?[50,30,20,0]:this.time<120?[30,30,25,15]:[20,25,30,25];
@@ -1000,6 +1043,7 @@ class Game {
     collectItem(type) {
         if(this.items.length>=this.maxItems) return;
         this.items.push(type);
+        this._itemBarDirty = true;
         this.updateItemBar();
     }
     useItem(index) {
@@ -1034,9 +1078,11 @@ class Game {
                 }
                 break;
         }
+        this._itemBarDirty = true;
         this.updateItemBar();
     }
     updateItemBar() {
+        this._itemBarDirty = false;
         const container=document.getElementById('itemSlots');
         if(!container) return;
         container.innerHTML='';
@@ -1083,6 +1129,33 @@ class Game {
             container.appendChild(slot);
         }
     }
+    // 轻量更新：仅更新冷却文字，不重建DOM
+    updateItemBarCooldowns() {
+        const container=document.getElementById('itemSlots');
+        if(!container) return;
+        for(let i=0;i<this.maxItems;i++) {
+            const slot=container.children[i];
+            if(!slot) continue;
+            const oldCd=slot.querySelector('.item-cd');
+            if(i<this.items.length) {
+                const type=this.items[i];
+                const onCd=this.itemCooldowns[type]>0;
+                if(onCd) {
+                    if(oldCd) oldCd.textContent=this.itemCooldowns[type].toFixed(1)+'s';
+                    else {
+                        const cd=document.createElement('span');
+                        cd.className='item-cd';
+                        cd.textContent=this.itemCooldowns[type].toFixed(1)+'s';
+                        slot.appendChild(cd);
+                    }
+                    slot.classList.add('item-cooldown');
+                } else {
+                    if(oldCd) oldCd.remove();
+                    slot.classList.remove('item-cooldown');
+                }
+            }
+        }
+    }
     render() {
         const ctx=this.ctx;
         ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
@@ -1092,7 +1165,7 @@ class Game {
             ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
         }
         for(const pk of this.pickups) pk.draw(ctx,this.cam);
-        for(const e of this.enemies) e.draw(ctx,this.cam);
+        for(const e of this.enemies) e.draw(ctx,this.cam,this.player);
         if(this.player) this.player.draw(ctx,this.cam);
         for(const proj of this.projectiles) proj.draw(ctx,this.cam);
         for(const pt of this.particles) pt.draw(ctx,this.cam);
@@ -1118,7 +1191,12 @@ class Game {
         const tEl=document.getElementById('hudTime'); if(tEl) tEl.textContent=m+':'+String(s).padStart(2,'0');
         const kEl=document.getElementById('hudKills'); if(kEl) kEl.textContent=this.kills;
         const sEl=document.getElementById('hudScore'); if(sEl) sEl.textContent=Math.floor(this.score);
-        this.updateItemBar();
+        // 优化：道具栏仅在变化时重建，其他时候只更新冷却文字
+        if (this._itemBarDirty) {
+            this.updateItemBar();
+        } else {
+            this.updateItemBarCooldowns();
+        }
     }
     showLevelUp() {
         this.paused=true;
