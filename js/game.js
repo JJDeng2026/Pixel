@@ -696,15 +696,20 @@ class Game{
         requestAnimationFrame(t=>this.gameLoop(t));
     }
     resize(){
-        const w=window.innerWidth;const h=window.innerHeight;
-        const ratio=Math.min(w/480,h/800);
+        const scrEl=document.getElementById('gameScreen');
+        const scrRect=scrEl?scrEl.getBoundingClientRect():{width:window.innerWidth,height:window.innerHeight};
+        const scrW=scrRect.width||window.innerWidth;
+        const scrH=scrRect.height||window.innerHeight;
+        const ratio=Math.min(scrW/480,scrH/800);
         this.gameW=480;this.gameH=800;
         this.canvas.width=480;this.canvas.height=800;
-        this.canvas.style.width=(480*ratio)+'px';
-        this.canvas.style.height=(800*ratio)+'px';
+        const cw=Math.floor(480*ratio);
+        const ch=Math.floor(800*ratio);
+        this.canvas.style.width=cw+'px';
+        this.canvas.style.height=ch+'px';
         this.canvas.style.position='absolute';
-        this.canvas.style.left=((w-480*ratio)/2)+'px';
-        this.canvas.style.top=((h-800*ratio)/2)+'px';
+        this.canvas.style.left=Math.floor((scrW-cw)/2)+'px';
+        this.canvas.style.top=Math.floor((scrH-ch)/2)+'px';
         this.scale=ratio;
         this.joystick.setBase(90,this.gameH*0.72);
     }
@@ -952,11 +957,15 @@ class Game{
     }
     gameLoop(timestamp){
         if(!this.running) return;
-        const dt=Math.min(0.05,(timestamp-this.lastTime)/1000);
-        this.lastTime=timestamp;
-        this.time+=dt;
-        if(this.state==='playing') this.update(dt);
-        this.render();
+        try {
+            const dt=Math.min(0.05,(timestamp-this.lastTime)/1000);
+            this.lastTime=timestamp;
+            this.time+=dt;
+            if(this.state==='playing') this.update(dt);
+            this.render();
+        } catch(e) {
+            console.error('Game loop error:', e);
+        }
         requestAnimationFrame(t=>this.gameLoop(t));
     }
     update(dt){
@@ -1213,9 +1222,17 @@ function updateMenuDisplay(){
 // ==================== 启动 ====================
 let _game=null;
 function startGame(){
-    document.getElementById('mainMenu').classList.add('hidden');
-    document.getElementById('gameScreen').classList.remove('hidden');
-    _game=new Game();
+    // 确保加载覆盖层已移除
+    const lo=document.getElementById('loadOverlay');
+    if(lo) lo.style.display='none';
+    try {
+        document.getElementById('mainMenu').classList.add('hidden');
+        document.getElementById('gameScreen').classList.remove('hidden');
+        if(_game) { _game.running=false; }
+        _game=new Game();
+    } catch(e) {
+        console.error('startGame error:', e);
+    }
 }
 window.startGame=startGame;
 
@@ -1225,7 +1242,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     // 加载资源
     Assets.loadAll().then(()=>{
         const el=document.getElementById('loadOverlay');
-        if(el){el.classList.add('load-done');setTimeout(()=>{if(el)el.style.display='none';},600);}
+        if(el){ el.classList.add('load-done'); el.style.display='none'; }
+    }).catch(()=>{
+        const el=document.getElementById('loadOverlay');
+        if(el){ el.classList.add('load-done'); el.style.display='none'; }
     });
 });
 

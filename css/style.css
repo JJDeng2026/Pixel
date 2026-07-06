@@ -7,7 +7,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Micr
 
 /* 加载 */
 #loadOverlay{position:fixed;inset:0;background:#0a0a1a;display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.5s;}
-#loadOverlay.load-done{opacity:0;pointer-events:none;}
+#loadOverlay.load-done{opacity:0;pointer-events:none;display:none!important;}
 .load-content{text-align:center;color:#c8a84e;}
 .load-spinner{width:40px;height:40px;border:3px solid rgba(255,204,0,0.2);border-top-color:#ffcc00;border-radius:50%;margin:0 auto 15px;animation:spin 0.8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -65,6 +65,5 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Micr
 
 @media(min-width:769px){
     #gameScreen{max-width:520px;max-height:880px;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:8px;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,0.5);}
-    #gameCanvas{max-width:100%;max-height:100%;}
     #mainMenu{max-width:500px;margin:0 auto;}
 }
