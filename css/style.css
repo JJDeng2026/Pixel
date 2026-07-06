@@ -1,4 +1,4 @@
-/* 王国守卫 - 塔防 v5.0 */
+/* 王国守卫 - 塔防 v6.0 */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
 html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Microsoft YaHei','SimHei',sans-serif;background:#1a1a2e;color:#e0d8c8;}
 
@@ -62,6 +62,11 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Micr
 .hud-xp-bar{position:relative;height:10px;background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.1);overflow:hidden;border-radius:2px;width:100%;max-width:140px;}
 .hud-xp-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#3388cc,#55aaff);transition:width 0.3s;}
 
+/* 村落血条 */
+.hud-village-bar{position:relative;height:16px;background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.15);overflow:hidden;border-radius:3px;width:100%;max-width:180px;display:flex;align-items:center;justify-content:center;flex:1;}
+.hud-village-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#cc3333,#ff8800,#44cc44);transition:width 0.3s;}
+.hud-hp-text{position:relative;z-index:1;font-size:10px;color:#fff;text-shadow:1px 1px 2px #000;font-weight:bold;}
+
 /* 技能按钮 */
 .skill-btns{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:16px;z-index:20;pointer-events:auto;}
 .btn-skill{position:relative;width:56px;height:56px;border:2px solid rgba(255,204,0,0.4);background:rgba(0,0,0,0.6);border-radius:12px;cursor:pointer;overflow:hidden;padding:0;transition:all 0.2s;}
@@ -80,20 +85,15 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Micr
 .death-title{color:#cc4444;text-shadow:0 0 10px rgba(204,68,68,0.3);}
 
 /* 波次信息 */
-.wave-info{font-size:14px;color:#ccc;margin-bottom:15px;line-height:1.6;}
-
-/* 升级选项 */
-.options-grid{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto;}
-.option-btn{background:rgba(0,0,0,0.5);border:1px solid rgba(255,204,0,0.3);padding:12px 14px;color:#e0d8c8;cursor:pointer;text-align:left;transition:all 0.2s;border-radius:4px;}
-.option-btn:hover,.option-btn:active{background:rgba(255,204,0,0.1);border-color:#ffcc00;transform:scale(1.02);}
-.option-btn .op-name{font-size:15px;color:#ffcc00;font-weight:bold;display:block;margin-bottom:3px;}
-.option-btn .op-desc{font-size:12px;color:#999;}
+.wave-info{font-size:14px;color:#ccc;margin-bottom:15px;line-height:1.6;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.enemy-tag{background:rgba(255,255,255,0.1);padding:4px 10px;border-radius:12px;font-size:12px;color:#e0d8c8;border:1px solid rgba(255,204,0,0.2);}
 
 /* 游戏结束 */
+.go-cause{font-size:16px;color:#ff8888;margin-bottom:15px;}
 .go-stats{background:rgba(0,0,0,0.4);padding:15px;margin-bottom:18px;text-align:left;border-radius:4px;}
-.go-stats p{font-size:14px;margin:6px 0;color:#ccc;}
-.go-reward{color:#ffcc00!important;font-weight:bold;margin-top:12px!important;}
-.go-btns{display:flex;flex-direction:column;gap:8px;align-items:center;}
+.go-stat{display:flex;justify-content:space-between;padding:4px 0;font-size:14px;color:#ccc;}
+.go-stat span:first-child{color:#999;}
+.go-stat span:last-child{color:#ffcc00;font-weight:bold;}
 
 /* 英雄强化 */
 .upgrade-gold{color:#ffcc00;margin-bottom:12px;font-size:15px;}
@@ -112,6 +112,23 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Micr
 .gm-row label{color:#ffcc00;min-width:40px;font-size:13px;}
 .gm-row input{width:90px;padding:5px 8px;background:rgba(255,255,255,0.1);border:1px solid #555;color:#fff;font-family:inherit;border-radius:3px;}
 .gm-row button{background:rgba(255,255,255,0.1);border:1px solid #555;color:#ccc;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit;border-radius:3px;}
+.btn-gm{background:linear-gradient(180deg,#3a1a2a,#1a0a1a);color:#a06080;padding:8px 30px;font-size:13px;border:1px solid #5a2a4a;}
+.btn-danger{background:#5a1a1a;color:#ff8888;padding:6px 14px;font-size:12px;border:1px solid #8a2a2a;}
+
+/* 升级选项 */
+.options-grid{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto;}
+.level-option{background:rgba(0,0,0,0.5);border:1px solid rgba(255,204,0,0.3);padding:12px 14px;color:#e0d8c8;cursor:pointer;text-align:left;transition:all 0.2s;border-radius:4px;}
+.level-option:hover,.level-option:active{background:rgba(255,204,0,0.1);border-color:#ffcc00;transform:scale(1.02);}
+.lo-name{font-size:15px;color:#ffcc00;font-weight:bold;display:block;margin-bottom:3px;}
+.lo-desc{font-size:12px;color:#999;}
+
+/* 游戏结束按钮 */
+.go-btns{display:flex;flex-direction:column;gap:8px;align-items:center;}
+
+/* 英雄强化列表 */
+.up-name{color:#ffcc00;font-weight:bold;font-size:13px;}
+.up-desc{color:#888;font-size:11px;margin-top:2px;}
+.up-cost{color:#ffcc00;font-size:12px;font-weight:bold;min-width:70px;text-align:right;}
 
 /* 响应式 */
 @media(min-width:768px){

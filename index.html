@@ -10,6 +10,15 @@
 </head>
 <body>
 
+<!-- 加载覆盖层 -->
+<div id="loadOverlay">
+    <div class="load-content">
+        <div class="load-spinner"></div>
+        <p id="loadText">加载中...</p>
+        <div class="load-bar"><div id="loadBar" class="load-bar-fill"></div></div>
+    </div>
+</div>
+
 <!-- 主菜单 -->
 <div id="mainMenu" class="screen">
     <div class="menu-bg"></div>
@@ -21,9 +30,8 @@
         <div class="menu-stats">
             <div class="mstat"><span class="ms-label">最高波次</span><span id="mHighWave">0</span></div>
             <div class="mstat"><span class="ms-label">金币</span><span id="mGold">0</span></div>
-            <div class="mstat"><span class="ms-label">总击杀</span><span id="mTotalKills">0</span></div>
+            <div class="mstat"><span class="ms-label">总击杀</span><span id="mKills">0</span></div>
         </div>
-        <!-- 关卡选择 -->
         <div class="stage-select">
             <div class="stage-label">选择关卡</div>
             <div class="stage-grid" id="stageGrid"></div>
@@ -49,11 +57,14 @@
             <div class="hud-xp-bar"><div id="hudXpFill" class="hud-xp-fill"></div></div>
         </div>
         <div class="hud-row">
+            <span class="hud-label">村落</span>
+            <div class="hud-village-bar"><div id="hudVillageFill" class="hud-village-fill"></div><span id="hudVillageHp" class="hud-hp-text">200/200</span></div>
+        </div>
+        <div class="hud-row">
             <div class="hud-hp-bar"><div id="hudHpFill" class="hud-hp-fill"></div><span id="hudHpText" class="hud-hp-text">120/120</span></div>
         </div>
     </div>
     <button id="btnPause" class="btn-pause">||</button>
-    <!-- 技能按钮 - 底部 -->
     <div class="skill-btns">
         <button id="btnSkill1" class="btn-skill" title="火球术">
             <img src="assets/images/td_skill_fire.jpg" class="skill-icon" alt="火球术">
@@ -77,8 +88,8 @@
 <!-- 波次过渡 -->
 <div id="waveScreen" class="overlay hidden">
     <div class="overlay-card">
-        <div class="overlay-title" id="waveTitle">第 1 波</div>
-        <div id="waveInfo" class="wave-info"></div>
+        <div class="overlay-title">第 <span id="waveNum">1</span> 波</div>
+        <div id="wavePreview" class="wave-info"></div>
         <button id="btnWaveStart" class="btn-primary">开始战斗</button>
     </div>
 </div>
@@ -87,15 +98,15 @@
 <div id="gameOverScreen" class="overlay hidden">
     <div class="overlay-card">
         <div class="overlay-title death-title">防线失守</div>
+        <div id="goVillage" class="go-cause"></div>
         <div class="go-stats">
-            <p>到达波次: <span id="goWave">1</span></p>
-            <p>击杀: <span id="goKills">0</span></p>
-            <p>等级: <span id="goLevel">1</span></p>
-            <p class="go-reward">获得金币: +<span id="goGold">0</span></p>
+            <div class="go-stat"><span>到达波次</span><span id="goWave">1</span></div>
+            <div class="go-stat"><span>击杀</span><span id="goKills">0</span></div>
+            <div class="go-stat"><span>获得金币</span><span id="goGold">0</span></div>
         </div>
         <div class="go-btns">
-            <button id="btnRestart" class="btn-primary">再来一局</button>
-            <button id="btnMenu" class="btn-secondary">返回主菜单</button>
+            <button id="btnRetry" class="btn-primary">再来一局</button>
+            <button id="btnQuit" class="btn-secondary">返回主菜单</button>
         </div>
     </div>
 </div>
@@ -105,13 +116,10 @@
     <div class="overlay-card">
         <div class="overlay-title" style="color:#ffcc00;">胜利!</div>
         <div class="go-stats">
-            <p>击杀: <span id="vKills">0</span></p>
-            <p>等级: <span id="vLevel">1</span></p>
-            <p class="go-reward">获得金币: +<span id="vGold">0</span></p>
+            <div class="go-stat"><span>获得金币</span><span id="vicGold">0</span></div>
         </div>
         <div class="go-btns">
-            <button id="btnVictoryRestart" class="btn-primary">再来一局</button>
-            <button id="btnVictoryMenu" class="btn-secondary">返回主菜单</button>
+            <button id="btnVictory" class="btn-primary">返回主菜单</button>
         </div>
     </div>
 </div>
@@ -131,7 +139,7 @@
 <div id="upgradeScreen" class="overlay hidden">
     <div class="overlay-card wide-card">
         <div class="overlay-title">英雄强化</div>
-        <p class="upgrade-gold">金币: <span id="upGold">0</span></p>
+        <div class="upgrade-gold">金币: <span id="upgradeGold">0</span></div>
         <div id="upgradeList" class="upgrade-list"></div>
         <button id="btnCloseUpgrade" class="btn-close">关闭</button>
     </div>
@@ -142,8 +150,16 @@
     <div class="overlay-card wide-card">
         <div class="overlay-title">GM后台</div>
         <div class="gm-section">
-            <div class="gm-row"><label>金币:</label><input id="gmGold" type="number"><button onclick="GM.setGold()">设置</button><button onclick="GM.addGold(99999)">+99999</button></div>
-            <div class="gm-row"><button onclick="GM.resetAll()" class="btn-danger">重置所有数据</button><button onclick="GM.maxUpgrades()">满级强化</button></div>
+            <div class="gm-row">
+                <label>金币:</label>
+                <input id="gmGoldInput" type="number" value="0">
+                <button id="btnGMSet">设置</button>
+                <button id="btnGMAdd">+99999</button>
+            </div>
+            <div class="gm-row">
+                <button id="btnGMReset" class="btn-danger">重置所有数据</button>
+                <button id="btnGMMax">满级强化</button>
+            </div>
         </div>
         <button id="btnCloseGM" class="btn-close">关闭</button>
     </div>
