@@ -269,7 +269,7 @@ class Enemy {
         game.addXP(this.xp);
     }
     draw(ctx) {
-        const drawSize=this.size*3.5;
+        const drawSize=this.size*5.5;
         if (this.sprite) {
             ctx.save();
             if(this.hitFlash>0) ctx.globalAlpha=0.5;
@@ -280,13 +280,13 @@ class Enemy {
             ctx.restore();
         } else {
             ctx.fillStyle=this.hitFlash>0?'#fff':this.color;
-            ctx.beginPath(); ctx.arc(this.x,this.y,this.size*0.7,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(this.x,this.y,this.size*0.8,0,Math.PI*2); ctx.fill();
             ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=2; ctx.stroke();
         }
         // 血条
         const hpR=this.hp/this.maxHp;
-        const bw=this.size*1.8, bh=4, by=this.y-this.size*0.7-10;
-        ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(this.x-bw/2,by,bw,bh);
+        const bw=this.size*1.8, bh=5, by=this.y-this.size*0.8-12;
+        ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(this.x-bw/2,by,bw,bh);
         ctx.fillStyle=hpR>0.3?'#4a4':'#c44'; ctx.fillRect(this.x-bw/2,by,bw*hpR,bh);
     }
     hasReachedBottom(gameH) { return this.y > gameH + 20; }
@@ -296,7 +296,7 @@ class Enemy {
 class Fireball {
     constructor(x, y, damage, gameH) {
         this.x=x; this.y=y;
-        this.targetY=rand(150, gameH-80);
+        this.targetY=rand(180, gameH-100);
         this.damage=damage; this.timer=0; this.duration=1.0;
         this.dead=false; this.exploded=false;
         this.sprite=Assets.getSprite('skillFire');
@@ -436,7 +436,7 @@ class Hero {
         this.baseAtkSpd=CFG.HERO.baseAtkSpd * (1 + permUpgrades.atkSpd*0.1);
         this.baseSpd=CFG.HERO.baseSpd + permUpgrades.spd*0.3;
         this.size=30;
-        this.x=200; this.y=620;
+        this.x=240; this.y=620;
         this.level=1; this.xp=0; this.xpToNext=CFG.XP_BASE;
         this.dead=false; this.invulnTimer=0;
         this.bonusAtk=0; this.bonusAtkSpd=0; this.bonusSpd=0;
@@ -536,7 +536,7 @@ class Hero {
     }
     draw(ctx) {
         if(this.dead) return;
-        const drawSize=this.size*4.5;
+        const drawSize=this.size*6.0;
         // 无敌闪烁
         if(this.invulnTimer>0&&Math.floor(this.invulnTimer*20)%2===0) return;
         if (this.sprite) {
@@ -659,7 +659,7 @@ class Game {
         this.canvas=document.getElementById('gameCanvas');
         this.ctx=this.canvas.getContext('2d');
         this.running=false; this.paused=false;
-        this.gameW=400; this.gameH=700;
+        this.gameW=480; this.gameH=800;
         this.stageId=1; this.stageCfg=CFG.STAGES[0];
         this.currentWave=1; this.waveActive=false;
         this.waveEnemies=[]; this.waveSpawned=0; this.waveSpawnTimer=0;
@@ -701,7 +701,7 @@ class Game {
         this.kills=0; this.score=0; this.goldEarned=0;
         this.hero=new Hero(DB.data.permUpgrades);
         this.hero.x=this.gameW/2;
-        this.hero.y=this.gameH-70;
+        this.hero.y=this.gameH-85;
         this.resize();
         this.lastTime=performance.now();
         this.showWaveTransition();
@@ -751,7 +751,7 @@ class Game {
                 e.dead=true;
                 this.enemies.splice(i,1);
                 for(let j=0;j<6;j++) {
-                    this.particles.push(new Particle(e.x,this.gameH-15,{
+                    this.particles.push(new Particle(e.x,this.gameH-20,{
                         vx:rand(-2,2), vy:rand(-3,0), color:'#ff4444', life:0.3, size:rand(2,4)
                     }));
                 }
@@ -778,7 +778,7 @@ class Game {
             this.waveSpawnTimer-=dt;
             if(this.waveSpawnTimer<=0&&this.waveSpawned<this.waveEnemies.length) {
                 const spawn=this.waveEnemies[this.waveSpawned];
-                const margin=30;
+                const margin=40;
                 const ex=rand(margin, this.gameW-margin);
                 this.enemies.push(new Enemy(spawn.type, ex, -rand(20,80), this.stageCfg));
                 this.waveSpawned++;
@@ -915,6 +915,9 @@ class Game {
         const bgImg=Assets.getRaw('bg');
         if(bgImg&&bgImg.complete) {
             ctx.drawImage(bgImg, 0, 0, this.gameW, this.gameH);
+            // 暗色覆盖层，让单位更突出
+            ctx.fillStyle='rgba(0,0,0,0.25)';
+            ctx.fillRect(0,0,this.gameW,this.gameH);
         } else {
             ctx.fillStyle=this.stageCfg.bgColor;
             ctx.fillRect(0,0,this.gameW,this.gameH);
@@ -922,7 +925,7 @@ class Game {
         // 底部防线（细线）
         ctx.strokeStyle='rgba(255,80,80,0.4)'; ctx.lineWidth=1.5;
         ctx.setLineDash([8,4]);
-        ctx.beginPath(); ctx.moveTo(0,this.gameH-15); ctx.lineTo(this.gameW,this.gameH-15); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,this.gameH-20); ctx.lineTo(this.gameW,this.gameH-20); ctx.stroke();
         ctx.setLineDash([]);
         // 粒子
         for(const pt of this.particles) pt.draw(ctx);
