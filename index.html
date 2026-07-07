@@ -25,14 +25,48 @@
         <div class="game-title">火柴人战斗</div>
         <div class="game-subtitle">STICKMAN FIGHTER</div>
 
-        <!-- 金币 & 等级 -->
         <div class="menu-stats">
             <span>💰 <span id="menuGold">0</span></span>
             <span>Lv.<span id="menuLevel">1</span></span>
             <span>武器: <span id="menuWeapon">剑</span></span>
         </div>
 
-        <!-- 商店 -->
+        <!-- 人物面板 -->
+        <div class="menu-section">
+            <div class="section-title">👤 人物面板 <button class="panel-toggle-btn" onclick="toggleEquipmentPanel()">展开</button></div>
+            <div id="equipPanel" class="equip-panel hidden">
+                <div class="equip-slots">
+                    <div class="equip-slot" id="slotWeapon" onclick="openEquipSelect('weapon')">
+                        <span class="slot-label">武器</span><span class="slot-val" id="slotWeaponVal">剑</span>
+                    </div>
+                    <div class="equip-slot" id="slotArmor" onclick="openEquipSelect('armor')">
+                        <span class="slot-label">护甲</span><span class="slot-val" id="slotArmorVal">无</span>
+                    </div>
+                    <div class="equip-slot" id="slotBracelet" onclick="openEquipSelect('bracelet')">
+                        <span class="slot-label">手镯</span><span class="slot-val" id="slotBraceletVal">无</span>
+                    </div>
+                    <div class="equip-slot" id="slotShoes" onclick="openEquipSelect('shoes')">
+                        <span class="slot-label">鞋子</span><span class="slot-val" id="slotShoesVal">无</span>
+                    </div>
+                </div>
+                <div class="equip-stats">
+                    <span>攻击: <span id="equipAtk">15</span></span>
+                    <span>防御: <span id="equipDef">0%</span></span>
+                    <span>回血: <span id="equipRegen">0/s</span></span>
+                    <span>速度: <span id="equipSpd">100%</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 装备选择弹窗 -->
+        <div id="equipSelectOverlay" class="equip-select-overlay hidden" onclick="closeEquipSelect()">
+            <div class="equip-select-box" onclick="event.stopPropagation()">
+                <div class="section-title" id="equipSelectTitle">选择装备</div>
+                <div id="equipSelectList" class="equip-select-list"></div>
+                <button class="btn-close" onclick="closeEquipSelect()">关闭</button>
+            </div>
+        </div>
+
         <div class="menu-section">
             <div class="section-title">⚔️ 升级（提升攻击力+10%）</div>
             <button class="shop-btn" id="btnLevelUp" onclick="buyLevel()">升级 Lv.<span id="btnLevelLv">1</span> → Lv.<span id="btnLevelNext">2</span> · 💰<span id="btnLevelCost">50</span></button>
@@ -61,7 +95,7 @@
         <button class="btn-start" onclick="startGame()">开始战斗</button>
 
         <div class="controls-hint">
-            <p>PC: WASD 移动 | J 攻击 | K 跳跃 | L 技能</p>
+            <p>PC: WASD 移动 | J 攻击 | K 跳跃 | L 技能 | ESC 暂停</p>
             <p>移动端: 左摇杆移动 | 右按钮操作</p>
         </div>
     </div>
@@ -72,6 +106,6 @@
     <canvas id="gameCanvas"></canvas>
 </div>
 
-<script src="js/game.js?v=3.0.0"></script>
+<script src="js/game.js?v=4.0.0"></script>
 </body>
 </html>
