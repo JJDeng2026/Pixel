@@ -4,12 +4,10 @@
 (function(){
 'use strict';
 
-// ==================== 忍者精灵加载与动画系统 ====================
-const NinjaSprite={
-  _images:{},
-  _processed:{},
+// ==================== 精灵贴图系统（直接用原始PNG，零处理） ====================
+const Sprite={
+  _imgs:{},
   _loaded:false,
-  _cache:{},
   _loading:false,
   _loadPromise:null,
   
@@ -35,145 +33,17 @@ const NinjaSprite={
     const total=Object.keys(map).length;
     let loaded=0;
     this._loadPromise=new Promise(resolve=>{
-      const checkDone=()=>{loaded++;if(loaded>=total){this._loaded=true;resolve();}};
-      for(const[key,src]of Object.entries(map)){
+      const check=()=>{loaded++;if(loaded>=total){this._loaded=true;resolve();}};
+      for(const[k,src]of Object.entries(map)){
         const img=new Image();
-        img.crossOrigin='anonymous';
-        img.onload=()=>{this._processImage(key,img);checkDone();};
-        img.onerror=checkDone;
-        img.src=src;
-        this._images[key]=img;
+        img.onload=check;img.onerror=check;img.src=src;
+        this._imgs[k]=img;
       }
     });
     return this._loadPromise;
   },
-  
-  // 处理图片：去除白色背景，保留原图不裁剪
-  _processImage(key,img){
-    try{
-      const tmp=document.createElement('canvas');
-      tmp.width=img.naturalWidth;tmp.height=img.naturalHeight;
-      const tctx=tmp.getContext('2d');
-      tctx.drawImage(img,0,0);
-      try{
-        const data=tctx.getImageData(0,0,tmp.width,tmp.height);
-        const px=data.data;
-        for(let i=0;i<px.length;i+=4){
-          const r=px[i],g=px[i+1],b=px[i+2];
-          // 接近白色的像素设为透明
-          if(r>230&&g>230&&b>230){px[i+3]=0;}
-          else if(r>200&&g>200&&b>200){px[i+3]=Math.floor(255*((r-200)/30)*((g-200)/30)*((b-200)/30));}
-        }
-        tctx.putImageData(data,0,0);
-        this._processed[key]=tmp;
-      }catch(e2){
-        // Tainted Canvas - 使用原始图片
-        this._processed[key]=tmp;
-      }
-    }catch(e){
-      this._processed[key]=img;
-    }
-  },
-  
-  getFrames(key,w,h,frameCount,animType){
-    const ck=key+'_'+w+'x'+h+'_'+frameCount+'_'+animType;
-    if(this._cache[ck])return this._cache[ck];
-    const img=this._processed[key]||this._images[key];
-    if(!img||!img.complete||img.naturalWidth===0){
-      return this._makeFallbackFrames(w,h,frameCount);
-    }
-    const frames=[];
-    const iw=img.width,ih=img.height;
-    // 保持原图比例，居中显示，不做任何扭曲变换
-    const scale=h/ih;
-    const drawW=Math.min(iw*scale,w);
-    const drawH=h;
-    const drawX=(w-drawW)/2;
-    const drawY=0;
-    for(let i=0;i<frameCount;i++){
-      const t=i/frameCount;
-      const c=document.createElement('canvas');c.width=w;c.height=h;
-      const ctx=c.getContext('2d');
-      ctx.imageSmoothingEnabled=true;
-      ctx.imageSmoothingQuality='high';
-      // 只做微小的上下浮动模拟呼吸/走路，不做旋转缩放
-      ctx.save();
-      switch(animType){
-        case'idle':{
-          // 微小呼吸浮动
-          const bob=Math.sin(t*Math.PI*2)*2;
-          ctx.translate(0,bob);
-          break;
-        }
-        case'run':{
-          // 跑步时上下弹跳
-          const bob=Math.abs(Math.sin(t*Math.PI*2))*4;
-          ctx.translate(0,-bob);
-          break;
-        }
-        case'attack':{
-          // 攻击时轻微前冲
-          const phase=t<0.5?t*2:(1-t)*2;
-          ctx.translate(phase*4,0);
-          break;
-        }
-        case'skill':{
-          // 技能时上下浮动
-          const pulse=Math.sin(t*Math.PI)*3;
-          ctx.translate(0,-pulse);
-          break;
-        }
-        case'jump':{
-          // 跳跃时上移
-          ctx.translate(0,-4);
-          break;
-        }
-        default:{ctx.translate(0,Math.sin(t*Math.PI*2)*2);}
-      }
-      ctx.drawImage(img,drawX,drawY,drawW,drawH);
-      ctx.restore();
-      frames.push(c);
-    }
-    this._cache[ck]=frames;
-    return frames;
-  },
-  
-  _makeFallbackFrames(w,h,n){
-    const frames=[];
-    for(let i=0;i<n;i++){
-      const t=i/n*Math.PI*2;
-      const c=document.createElement('canvas');c.width=w;c.height=h;
-      const ctx=c.getContext('2d');
-      ctx.fillStyle='#333';
-      ctx.beginPath();ctx.arc(w/2,h*0.4+Math.sin(t)*1,12,0,Math.PI*2);ctx.fill();
-      ctx.fillRect(w/2-3,h*0.4+12,6,30);
-      ctx.fillRect(w/2-3,h*0.4+12,15,5);
-      ctx.fillRect(w/2-12,h*0.4+12,15,5);
-      ctx.fillRect(w/2-3,h*0.4+25,12,5);
-      ctx.fillRect(w/2-9,h*0.4+25,12,5);
-      frames.push(c);
-    }
-    return frames;
-  }
-};
-
-// ==================== 动画配置 ====================
-const ANIM={
-  playerIdle(w,h){return NinjaSprite.getFrames('playerIdle',w,h,8,'idle');},
-  playerRun(w,h){return NinjaSprite.getFrames('playerRun',w,h,8,'run');},
-  playerJump(w,h){return NinjaSprite.getFrames('playerJump',w,h,4,'jump');},
-  playerAtkSword(w,h){return NinjaSprite.getFrames('playerAtkSword',w,h,6,'attack');},
-  playerAtkStaff(w,h){return NinjaSprite.getFrames('playerAtkStaff',w,h,6,'attack');},
-  playerAtkKnife(w,h){return NinjaSprite.getFrames('playerAtkKnife',w,h,6,'attack');},
-  playerAtkSpear(w,h){return NinjaSprite.getFrames('playerAtkSpear',w,h,6,'attack');},
-  playerSkill(w,h){return NinjaSprite.getFrames('playerSkill',w,h,8,'skill');},
-  enemyIdle(w,h){return NinjaSprite.getFrames('enemyIdle',w,h,8,'idle');},
-  enemyRun(w,h){return NinjaSprite.getFrames('enemyRun',w,h,8,'run');},
-  enemyAttack(w,h){return NinjaSprite.getFrames('enemyAttack',w,h,6,'attack');},
-  bossIdle(w,h){return NinjaSprite.getFrames('bossIdle',w,h,8,'idle');},
-  bossRun(w,h){return NinjaSprite.getFrames('bossRun',w,h,8,'run');},
-  bossAttack(w,h){return NinjaSprite.getFrames('bossIdle',w,h,6,'attack');},
-  bossSkill(w,h){return NinjaSprite.getFrames('bossSkill',w,h,8,'skill');},
+  // 直接返回原始图片，不做任何处理
+  get(key){return this._imgs[key]||null;}
 };
 
 // ==================== 配置 ====================
@@ -356,32 +226,9 @@ class Player{
     else this.state='idle';
     // 帧更新
     this.frameIdx+=dt*this.frameSpeed;
-    const maxFrames=this.getMaxFrames();
-    if(this.frameIdx>=maxFrames)this.frameIdx-=maxFrames;
-    if(this.attacking&&this.frameIdx>=maxFrames-1){this.attacking=false;this.frameIdx=0;}
-    if(this.skilling&&this.frameIdx>=maxFrames-1){this.skilling=false;this.frameIdx=0;}
-  }
-  
-  getMaxFrames(){
-    switch(this.state){
-      case 'idle':return 8;
-      case 'run':return 8;
-      case 'jump':return 4;
-      case 'attack':return 6;
-      case 'skill':return 8;
-      default:return 8;
-    }
-  }
-  
-  getCurrentFrames(){
-    if(this.state==='attack'){
-      const animKey=this.getWeaponCfg().anim||'playerAtkSword';
-      return ANIM[animKey](this.w,this.h);
-    }
-    if(this.state==='skill')return ANIM.playerSkill(this.w,this.h);
-    if(this.state==='run')return ANIM.playerRun(this.w,this.h);
-    if(this.state==='jump')return ANIM.playerJump(this.w,this.h);
-    return ANIM.playerIdle(this.w,this.h);
+    if(this.frameIdx>=99)this.frameIdx-=99;
+    if(this.attacking&&this.frameIdx>=this.frameSpeed*6){this.attacking=false;this.frameIdx=0;}
+    if(this.skilling&&this.frameIdx>=this.frameSpeed*8){this.skilling=false;this.frameIdx=0;}
   }
   
   attack(){if(this.atkTimer>0||this.attacking)return null;this.atkTimer=this.getWeaponCfg().speed*CFG.PLAYER.atkCooldown;this.attacking=true;this.frameIdx=0;const dir=this.facingRight?1:-1;return {x:this.x+dir*30,y:this.y-5,w:this.getAtkRange(),h:40,damage:this.getAtk(),knockback:dir*5,color:this.getWeaponCfg().color};}
@@ -391,16 +238,32 @@ class Player{
   
   draw(ctx,camX){
     if(this.invulnTimer>0&&Math.floor(this.invulnTimer*20)%2===0)return;
-    const frames=this.getCurrentFrames();
-    const idx=Math.floor(this.frameIdx)%frames.length;
-    const frame=frames[idx];
+    const img=this.getSprite();
     const sx=this.x-camX-this.w/2,sy=this.y-this.h/2;
     ctx.save();
     if(!this.facingRight){ctx.translate(this.x-camX,0);ctx.scale(-1,1);ctx.translate(-(this.x-camX),0);}
     if(this.hitFlash>0&&this.state!=='hurt')ctx.globalAlpha=0.5;
-    ctx.drawImage(frame,sx,sy,this.w,this.h);
+    if(img&&img.complete&&img.naturalWidth>0){
+      const iw=img.naturalWidth,ih=img.naturalHeight;
+      const scale=this.h/ih;
+      const dw=Math.min(iw*scale,this.w);
+      const dx=(this.w-dw)/2;
+      // 使用位移制造动画感，但图片本身不变
+      const bob=this.state==='run'?Math.abs(Math.sin(this.frameIdx*0.8))*4:(this.state==='idle'?Math.sin(this.frameIdx*0.5)*2:0);
+      const atkShift=this.state==='attack'?(Math.sin(this.frameIdx*1.2)*4):0;
+      ctx.drawImage(img,sx+dx,sy+bob+atkShift,dw,this.h);
+    }
     ctx.restore();
     this.drawHealthBar(ctx,camX);
+  }
+  getSprite(){
+    switch(this.state){
+      case'attack':return Sprite.get(this.getWeaponCfg().anim||'playerAtkSword');
+      case'skill':return Sprite.get('playerSkill');
+      case'run':return Sprite.get('playerRun');
+      case'jump':return Sprite.get('playerJump');
+      default:return Sprite.get('playerIdle');
+    }
   }
   
   drawHealthBar(ctx,camX){
@@ -500,19 +363,24 @@ class Enemy{
   
   draw(ctx,camX){
     if(this.fullyRemoved)return;
-    let frames;
-    if(this.dead)frames=ANIM.enemyIdle(this.w,this.h);
-    else if(this.attacking)frames=ANIM.enemyAttack(this.w,this.h);
-    else if(this.state==='patrol'||this.state==='chase'||this.state==='dodge')frames=ANIM.enemyRun(this.w,this.h);
-    else frames=ANIM.enemyIdle(this.w,this.h);
-    const idx=Math.floor(this.frameIdx)%frames.length;
-    const frame=frames[idx];
+    let img;
+    if(this.dead)img=Sprite.get('enemyIdle');
+    else if(this.attacking)img=Sprite.get('enemyAttack');
+    else if(this.state==='patrol'||this.state==='chase'||this.state==='dodge')img=Sprite.get('enemyRun');
+    else img=Sprite.get('enemyIdle');
     const sx=this.x-camX-this.w/2,sy=this.y-this.h/2;
     ctx.save();
     if(this.dead){ctx.globalAlpha=Math.max(0,1-this.deathTimer*2.5);ctx.translate(this.x-camX,this.y);ctx.rotate(this.deathTimer*4);ctx.translate(-(this.x-camX),-this.y);}
     if(!this.facingRight){ctx.translate(this.x-camX,0);ctx.scale(-1,1);ctx.translate(-(this.x-camX),0);}
     if(this.hitFlash>0)ctx.globalAlpha=0.5;
-    ctx.drawImage(frame,sx,sy,this.w,this.h);
+    if(img&&img.complete&&img.naturalWidth>0){
+      const iw=img.naturalWidth,ih=img.naturalHeight;
+      const scale=this.h/ih;
+      const dw=Math.min(iw*scale,this.w);
+      const dx=(this.w-dw)/2;
+      const bob=this.state==='chase'||this.state==='patrol'?Math.abs(Math.sin(this.frameIdx*0.8))*3:(this.state==='idle'?Math.sin(this.frameIdx*0.5)*1.5:0);
+      ctx.drawImage(img,sx+dx,sy+bob,dw,this.h);
+    }
     ctx.restore();
     if(!this.dead)this.drawHealthBar(ctx,camX);
   }
@@ -592,19 +460,24 @@ class Boss extends Enemy{
   
   draw(ctx,camX){
     if(this.fullyRemoved)return;
-    let frames;
-    if(this.skilling)frames=ANIM.bossSkill(this.w,this.h);
-    else if(this.attacking)frames=ANIM.bossAttack(this.w,this.h);
-    else frames=ANIM.bossRun(this.w,this.h);
-    const idx=Math.floor(this.frameIdx)%frames.length;
-    const frame=frames[idx];
+    let img;
+    if(this.skilling)img=Sprite.get('bossSkill');
+    else if(this.attacking)img=Sprite.get('bossIdle');
+    else img=Sprite.get('bossRun');
     const sx=this.x-camX-this.w/2,sy=this.y-this.h/2;
     ctx.save();
     if(this.dead){ctx.globalAlpha=Math.max(0,1-this.deathTimer*2.5);ctx.translate(this.x-camX,this.y);ctx.rotate(this.deathTimer*4);ctx.translate(-(this.x-camX),-this.y);}
     if(!this.facingRight){ctx.translate(this.x-camX,0);ctx.scale(-1,1);ctx.translate(-(this.x-camX),0);}
     if(this.stunned)ctx.globalAlpha=0.4+Math.sin(this.animTimer*10)*0.3;
     else if(this.hitFlash>0)ctx.globalAlpha=0.5;
-    ctx.drawImage(frame,sx,sy,this.w,this.h);
+    if(img&&img.complete&&img.naturalWidth>0){
+      const iw=img.naturalWidth,ih=img.naturalHeight;
+      const scale=this.h/ih;
+      const dw=Math.min(iw*scale,this.w);
+      const dx=(this.w-dw)/2;
+      const bob=Math.sin(this.frameIdx*0.5)*2;
+      ctx.drawImage(img,sx+dx,sy+bob,dw,this.h);
+    }
     ctx.restore();
     if(!this.dead)this.drawBars(ctx,camX);
     if(this.skilling&&this.skillWarning>0)this.drawSkillWarning(ctx,camX);
@@ -999,7 +872,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const el=document.getElementById('loadOverlay');
   document.getElementById('loadText').textContent='加载角色素材...';
   document.getElementById('loadBar').style.width='30%';
-  NinjaSprite.load().then(()=>{
+  Sprite.load().then(()=>{
     document.getElementById('loadBar').style.width='100%';
     updateMenuDisplay();
     if(el){el.classList.add('load-done');el.style.display='none';}
