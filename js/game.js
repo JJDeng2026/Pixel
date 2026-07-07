@@ -7,6 +7,7 @@
 // ==================== 忍者精灵加载与动画系统 ====================
 const NinjaSprite={
   _images:{},
+  _processed:{},
   _loaded:false,
   _cache:{},
   _loading:false,
@@ -34,7 +35,8 @@ const NinjaSprite={
       const checkDone=()=>{loaded++;if(loaded>=total){this._loaded=true;resolve();}};
       for(const[key,src]of Object.entries(map)){
         const img=new Image();
-        img.onload=checkDone;
+        img.crossOrigin='anonymous';
+        img.onload=()=>{this._processImage(key,img);checkDone();};
         img.onerror=checkDone;
         img.src=src;
         this._images[key]=img;
@@ -43,29 +45,106 @@ const NinjaSprite={
     return this._loadPromise;
   },
   
+  // 去除白色背景并自动裁剪
+  _processImage(key,img){
+    try{
+      const tmp=document.createElement('canvas');
+      tmp.width=img.naturalWidth;tmp.height=img.naturalHeight;
+      const tctx=tmp.getContext('2d');
+      tctx.drawImage(img,0,0);
+      const data=tctx.getImageData(0,0,tmp.width,tmp.height);
+      const px=data.data;
+      let minX=tmp.width,maxX=0,minY=tmp.height,maxY=0;
+      for(let y=0;y<tmp.height;y++){
+        for(let x=0;x<tmp.width;x++){
+          const i=(y*tmp.width+x)*4;
+          const r=px[i],g=px[i+1],b=px[i+2];
+          // 接近白色的像素设为透明
+          if(r>230&&g>230&&b>230){px[i+3]=0;}
+          else if(r>200&&g>200&&b>200){px[i+3]=Math.floor(255*((r-200)/30)*((g-200)/30)*((b-200)/30));}
+          if(px[i+3]>20){
+            if(x<minX)minX=x;if(x>maxX)maxX=x;
+            if(y<minY)minY=y;if(y>maxY)maxY=y;
+          }
+        }
+      }
+      tctx.putImageData(data,0,0);
+      // 裁剪到内容区域
+      const cw=maxX-minX+1,ch=maxY-minY+1;
+      if(cw>10&&ch>10){
+        const cropped=document.createElement('canvas');
+        cropped.width=cw;cropped.height=ch;
+        cropped.getContext('2d').drawImage(tmp,minX,minY,cw,ch,0,0,cw,ch);
+        this._processed[key]=cropped;
+      }else{
+        this._processed[key]=tmp;
+      }
+    }catch(e){
+      this._processed[key]=img;
+    }
+  },
+  
   getFrames(key,w,h,frameCount,animType){
-    const ck=key+'_'+w+'x'+h+'_'+frameCount;
+    const ck=key+'_'+w+'x'+h+'_'+frameCount+'_'+animType;
     if(this._cache[ck])return this._cache[ck];
-    const img=this._images[key];
+    const img=this._processed[key]||this._images[key];
     if(!img||!img.complete||img.naturalWidth===0){
       return this._makeFallbackFrames(w,h,frameCount);
     }
     const frames=[];
+    const iw=img.width,ih=img.height;
+    // 计算缩放比例，保持比例填满高度
+    const scale=h/ih;
+    const drawW=iw*scale;
+    const drawX=(w-drawW)/2;
     for(let i=0;i<frameCount;i++){
       const t=i/frameCount;
       const c=document.createElement('canvas');c.width=w;c.height=h;
       const ctx=c.getContext('2d');
-      ctx.save();ctx.translate(w/2,h/2);
+      ctx.imageSmoothingEnabled=true;
+      ctx.imageSmoothingQuality='high';
+      ctx.save();ctx.translate(w/2,h*0.6);
       switch(animType){
-        case'idle':{ctx.translate(0,Math.sin(t*Math.PI*2)*2);break;}
-        case'run':{ctx.translate(0,Math.sin(t*Math.PI*2)*4);ctx.rotate(Math.sin(t*Math.PI*2)*0.04);break;}
-        case'attack':{const phase=t<0.5?t*2:(1-t)*2;ctx.rotate((t-0.5)*0.5);ctx.translate(phase*8,0);break;}
-        case'skill':{ctx.rotate(t*0.8);const s=1+Math.sin(t*Math.PI)*0.15;ctx.scale(s,s);break;}
-        case'jump':{ctx.rotate(-0.08);ctx.translate(0,-5);break;}
+        case'idle':{
+          const bob=Math.sin(t*Math.PI*2)*2;
+          ctx.translate(0,bob);
+          ctx.scale(1+Math.sin(t*Math.PI*2)*0.01,1+Math.sin(t*Math.PI*2+Math.PI)*0.01);
+          break;
+        }
+        case'run':{
+          const bob=Math.abs(Math.sin(t*Math.PI*2))*5;
+          ctx.translate(0,-bob);
+          ctx.rotate(Math.sin(t*Math.PI*2)*0.06);
+          // 跑步时身体轻微前后晃动
+          ctx.translate(Math.sin(t*Math.PI*2)*3,0);
+          break;
+        }
+        case'attack':{
+          const phase=t<0.5?t*2:(1-t)*2;
+          // 攻击动作：预备->挥砍->收回
+          ctx.rotate((t-0.5)*0.7);
+          ctx.translate(phase*12,phase*-4);
+          ctx.scale(1+phase*0.1,1+phase*0.05);
+          break;
+        }
+        case'skill':{
+          // 技能：旋转+能量爆发
+          const spin=t*Math.PI*2*0.6;
+          const pulse=Math.sin(t*Math.PI)*0.2;
+          ctx.rotate(spin);
+          ctx.scale(1+pulse,1+pulse);
+          break;
+        }
+        case'jump':{
+          const jt=t;
+          ctx.rotate(-0.15+jt*0.1);
+          ctx.translate(0,-8+jt*4);
+          break;
+        }
         default:{ctx.translate(0,Math.sin(t*Math.PI*2)*2);}
       }
-      ctx.translate(-w/2,-h/2);
-      ctx.drawImage(img,0,0,w,h);
+      ctx.translate(-w/2,-h*0.6);
+      ctx.drawImage(img,drawX,0,drawW,h);
       ctx.restore();
       frames.push(c);
     }
@@ -367,13 +446,14 @@ class Enemy{
     this.animTimer=0;this.frameIdx=0;this.frameSpeed=8;
   }
   
-  update(dt,player,playerAttacking){
+  update(dt,player,playerAttacking,worldW){
     if(this.dead){this.deathTimer+=dt;if(this.deathTimer>0.6)this.fullyRemoved=true;return;}
     this.animTimer+=dt;this.breathCycle+=dt*2.5;
     this.atkTimer=Math.max(0,this.atkTimer-dt);
     this.hitFlash=Math.max(0,this.hitFlash-dt);this.hitStunTimer=Math.max(0,this.hitStunTimer-dt);
     this.jumpCooldown=Math.max(0,this.jumpCooldown-dt);this.aggressiveTimer-=dt;
-    if(this.hitStunTimer>0){this.state='hitstun';this.vx*=0.9;this.x+=this.vx*60*dt;return;}
+    if(this.hitStunTimer>0){this.state='hitstun';this.vx*=0.9;this.x+=this.vx*60*dt;
+      this.x=clamp(this.x,this.w,worldW-this.w);return;}
     const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
     this.facingRight=player.x>this.x;
     const playerClose=d<70;let flankOffset=this.flankDir*50;
@@ -383,22 +463,44 @@ class Enemy{
         this.vx=0;this.stateTimer-=dt;if(this.stateTimer<=0){this.state='patrol';this.stateTimer=rand(0.8,2.5);this.patrolDir=rand(0,1)<0.5?-1:1;}
         if(d<this.sight)this.state='chase';break;
       case 'patrol':
-        this.vx=this.spd*this.patrolDir*0.6;this.stateTimer-=dt;if(this.stateTimer<=0){this.state='idle';this.stateTimer=rand(0.5,2);}
-        if(d<this.sight)this.state='chase';if(Math.abs(this.x-this.patrolBase)>200)this.patrolDir*=-1;break;
+        // 巡逻时限制在世界边界内
+        if(this.x<=this.w+10)this.patrolDir=1;
+        if(this.x>=worldW-this.w-10)this.patrolDir=-1;
+        this.vx=this.spd*this.patrolDir*0.6;
+        this.stateTimer-=dt;if(this.stateTimer<=0){this.state='idle';this.stateTimer=rand(0.5,2);}
+        if(d<this.sight)this.state='chase';
+        if(Math.abs(this.x-this.patrolBase)>200)this.patrolDir*=-1;break;
       case 'chase':
-        this.vx=clamp((player.x+flankOffset-this.x)*0.1,-1,1)*this.spd;
+        // 更智能的追击：保持攻击距离，不会越界
+        let targetX=player.x+flankOffset;
+        // 限制目标位置在世界内
+        targetX=clamp(targetX,this.w+20,worldW-this.w-20);
+        const dx=targetX-this.x;
+        this.vx=clamp(dx*0.12,-1,1)*this.spd;
+        // 如果快到边界了就不要继续往外跑
+        if(this.x<=this.w+30&&this.vx<0)this.vx=0;
+        if(this.x>=worldW-this.w-30&&this.vx>0)this.vx=0;
         if(playerAttacking&&playerClose&&this.jumpCooldown<=0&&Math.random()<this.jumpChance){this.vy=-9;this.grounded=false;this.jumpCooldown=2.0;}
         if(d<this.atkRange&&this.atkTimer<=0&&this.grounded){this.state='attack';this.attacking=true;this.frameIdx=0;this.atkTimer=this.atkCd;}
         if(d>this.sight*1.2){this.state='idle';this.stateTimer=rand(0.5,1.5);}
-        if(playerAttacking&&d<100&&Math.random()<this.dodge){this.state='dodge';this.stateTimer=0.35;this.vx=(this.facingRight?-1:1)*this.spd*3;}
+        if(playerAttacking&&d<100&&Math.random()<this.dodge){
+          // 闪避方向优先往世界内部，不会闪出去
+          const dodgeDir=(this.x<worldW/2)?1:-1;
+          this.state='dodge';this.stateTimer=0.35;this.vx=dodgeDir*this.spd*3;
+        }
         break;
       case 'attack':
         this.vx*=0.7;this.frameIdx+=dt*this.frameSpeed;if(this.frameIdx>=6){this.attacking=false;this.frameIdx=0;this.state='chase';this.doAttack(player);}break;
-      case 'dodge':this.stateTimer-=dt;this.vx*=0.95;if(this.stateTimer<=0)this.state='chase';break;
+      case 'dodge':this.stateTimer-=dt;this.vx*=0.95;
+        if(this.x<=this.w+20)this.vx=Math.abs(this.vx)*0.5;
+        if(this.x>=worldW-this.w-20)this.vx=-Math.abs(this.vx)*0.5;
+        if(this.stateTimer<=0)this.state='chase';break;
       case 'hitstun':break;
     }
     if(!this.grounded){this.vy+=25*dt;}
     this.x+=this.vx*60*dt;this.y+=this.vy*60*dt;
+    // 严格限制敌人不离开世界边界
+    this.x=clamp(this.x,this.w*0.6,worldW-this.w*0.6);
     if(this.y+this.h/2>=this.groundY){this.y=this.groundY-this.h/2;this.vy=0;this.grounded=true;}else this.grounded=false;
     // 更新帧
     if(this.state==='patrol'||this.state==='chase'){this.frameIdx+=dt*this.frameSpeed;if(this.frameIdx>=8)this.frameIdx-=8;}
@@ -455,7 +557,7 @@ class Boss extends Enemy{
     this.frameSpeed=4;
   }
   
-  update(dt,player,playerAttacking){
+  update(dt,player,playerAttacking,worldW){
     if(this.dead){this.deathTimer+=dt;if(this.deathTimer>0.6)this.fullyRemoved=true;return;}
     this.animTimer+=dt;this.atkTimer=Math.max(0,this.atkTimer-dt);
     this.hitFlash=Math.max(0,this.hitFlash-dt);this.armorHitFlash=Math.max(0,this.armorHitFlash-dt);
@@ -466,10 +568,12 @@ class Boss extends Enemy{
       this.skillTimer-=dt;
       if(this.skillTimer<=0&&d<this.sight&&!this.attacking){this.startSkill(player);}
     }
-    if(this.skilling){this.executeSkill(dt,player);return;}
+    if(this.skilling){this.executeSkill(dt,player,worldW);return;}
     this.vx=(this.facingRight?1:-1)*this.spd;
     if(d<this.atkRange&&this.atkTimer<=0){this.attacking=true;this.frameIdx=0;this.atkTimer=this.atkCd;}
     this.x+=this.vx*60*dt;this.y=this.groundY-this.h/2;
+    // BOSS边界限制
+    this.x=clamp(this.x,this.w,worldW-this.w);
     if(this.attacking){this.frameIdx+=dt*6;if(this.frameIdx>=6){this.attacking=false;this.frameIdx=0;this.doAttack(player);}}
     if(this.state!=='patrol'&&this.state!=='chase')this.state='chase';
     this.frameIdx+=dt*this.frameSpeed;if(this.frameIdx>=8)this.frameIdx-=8;
@@ -477,12 +581,16 @@ class Boss extends Enemy{
   
   startSkill(player){this.skilling=true;this.frameIdx=0;this.skillWarning=0.8;const idx=this.chapterId>=4?randInt(0,2):(this.chapterId>=2?randInt(0,1):0);this.skillType=this.skillTypes[idx];this.skillChargeDir=this.facingRight?1:-1;this.vx=0;}
   
-  executeSkill(dt,player){
+  executeSkill(dt,player,worldW){
     if(this.skillWarning>0){this.skillWarning-=dt;return;}
     this.frameIdx+=dt*this.frameSpeed;
     const skillCfg=CFG.BOSS_SKILLS[this.skillType];
     if(this.skillType==='groundSlam'){if(this.frameIdx>=3&&this.frameIdx<4){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<skillCfg.range)player.takeDamage(skillCfg.dmg);}if(this.frameIdx>=8)this.endSkill();}
-    else if(this.skillType==='charge'){this.vx=this.skillChargeDir*this.spd*3;this.x+=this.vx*60*dt;if(this.frameIdx>=3&&this.frameIdx<5){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.atkRange+30)player.takeDamage(skillCfg.dmg);}if(this.frameIdx>=8)this.endSkill();}
+    else if(this.skillType==='charge'){this.vx=this.skillChargeDir*this.spd*3;this.x+=this.vx*60*dt;
+      // 冲锋技能边界限制
+      this.x=clamp(this.x,this.w,worldW-this.w);
+      if(this.x<=this.w||this.x>=worldW-this.w){this.endSkill();return;}
+      if(this.frameIdx>=3&&this.frameIdx<5){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.atkRange+30)player.takeDamage(skillCfg.dmg);}if(this.frameIdx>=8)this.endSkill();}
     else if(this.skillType==='projectile'){if(this.frameIdx>=3&&this.frameIdx<4){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<skillCfg.range)player.takeDamage(skillCfg.dmg);}if(this.frameIdx>=6)this.endSkill();}
   }
   
@@ -725,12 +833,27 @@ class Game{
     if(this.shakeTimer>0)this.shakeTimer=Math.max(0,this.shakeTimer-dt);
     const playerAttacking=this.player.attacking||this.player.skilling;
     this.player.update(dt,this.joystick,this.worldW,this.groundY);
-    const targetCamX=this.player.x-this.gameW/2;this.camX=lerp(this.camX,targetCamX,0.08);this.camX=clamp(this.camX,0,this.worldW-this.gameW);
-    for(const enemy of this.enemies){if(!enemy.fullyRemoved)enemy.update(dt,this.player,playerAttacking);}
-    if(this.boss&&!this.boss.fullyRemoved)this.boss.update(dt,this.player,playerAttacking);
-    for(const p of this.particles)p.update(dt);this.particles=this.particles.filter(p=>!p.dead);
-    for(const t of this.floatingTexts)t.update(dt);this.floatingTexts=this.floatingTexts.filter(t=>!t.dead);
-    for(const d of this.drops){if(!d.dead)d.update(dt,this.player);}this.drops=this.drops.filter(d=>!d.dead);
+    const targetCamX=this.player.x-this.gameW/2;this.camX=lerp(this.camX,targetCamX,0.12);this.camX=clamp(this.camX,0,this.worldW-this.gameW);
+    // 批量更新敌人，仅处理视野内敌人
+    const camLeft=this.camX-100,camRight=this.camX+this.gameW+100;
+    for(const enemy of this.enemies){
+      if(enemy.fullyRemoved)continue;
+      // 视野外敌人降低更新频率（隔帧更新）
+      if(enemy.x<camLeft||enemy.x>camRight){
+        enemy._offscreen=(enemy._offscreen||0)+1;
+        if(enemy._offscreen<2)continue;
+        enemy._offscreen=0;
+      }
+      enemy.update(dt,this.player,playerAttacking,this.worldW);
+    }
+    if(this.boss&&!this.boss.fullyRemoved)this.boss.update(dt,this.player,playerAttacking,this.worldW);
+    // 粒子数量限制，避免性能问题
+    if(this.particles.length>80){this.particles.splice(0,this.particles.length-80);}
+    for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.update(dt);if(p.dead)this.particles.splice(i,1);}
+    if(this.floatingTexts.length>30){this.floatingTexts.splice(0,this.floatingTexts.length-30);}
+    for(let i=this.floatingTexts.length-1;i>=0;i--){const t=this.floatingTexts[i];t.update(dt);if(t.dead)this.floatingTexts.splice(i,1);}
+    if(this.drops.length>15){this.drops.splice(0,this.drops.length-15);}
+    for(let i=this.drops.length-1;i>=0;i--){const d=this.drops[i];if(!d.dead)d.update(dt,this.player);else this.drops.splice(i,1);}
     this.checkSceneClear();
     if(this.transitionTimer>0){this.transitionTimer-=dt;if(this.transitionTimer<=0)this.doNextSubLevel();}
     if(this.player.hp<=0){this.state='gameover';this.gameOverCause='被敌人击败';}
@@ -753,15 +876,16 @@ class Game{
     this.bg.draw(ctx,this.camX,w,h,this.groundY,this.sceneCfg.sky||this.chapterCfg.sky);
     ctx.fillStyle=this.sceneCfg.ground||this.chapterCfg.ground;ctx.fillRect(0,this.groundY,w,h-this.groundY);
     ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,this.groundY);ctx.lineTo(w,this.groundY);ctx.stroke();
-    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
     ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='bold 12px sans-serif';ctx.textAlign='right';
     ctx.fillText('第'+this.chapterId+'章 '+this.chapterCfg.name+' - '+this.sceneCfg.name,w-15,25);ctx.textAlign='start';
-    for(const enemy of this.enemies){if(!enemy.fullyRemoved)enemy.draw(ctx,this.camX);}
+    // 视野剔除：只绘制屏幕内的敌人
+    const cL=this.camX-80,cR=this.camX+w+80;
+    for(const enemy of this.enemies){if(!enemy.fullyRemoved&&enemy.x>cL&&enemy.x<cR)enemy.draw(ctx,this.camX);}
     if(this.boss&&!this.boss.fullyRemoved)this.boss.draw(ctx,this.camX);
-    for(const d of this.drops)if(!d.dead)d.draw(ctx,this.camX);
+    for(const d of this.drops)if(!d.dead&&d.x>cL&&d.x<cR)d.draw(ctx,this.camX);
     this.player.draw(ctx,this.camX);
-    for(const p of this.particles)p.draw(ctx,this.camX);
-    for(const t of this.floatingTexts)t.draw(ctx,this.camX);
+    for(const p of this.particles)if(p.x>cL&&p.x<cR)p.draw(ctx,this.camX);
+    for(const t of this.floatingTexts)if(t.x>cL&&t.x<cR)t.draw(ctx,this.camX);
     ctx.restore();
     this.joystick.draw(ctx);this.drawButtons(ctx);this.drawHUD(ctx);this.drawPauseBtn(ctx);
     if(this.sceneClear&&!this.sceneCfg.boss){ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText('敌人已清除!',w/2,h/2-60);ctx.textAlign='start';}
