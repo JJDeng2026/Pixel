@@ -1,47 +1,408 @@
 /**
- * 火柴人战斗 v6.0 - 武器动画/打击感/BOSS技能/胜利延迟/返回修复
+ * 火柴人战斗 v7.0 - 逐帧动漫系统 + 攻击卡死修复 + 所有动画重写
  */
 (function(){
 'use strict';
 
-// ==================== 绿幕抠图 ====================
-const ChromaKey={
-  cache:{},
-  process(img,key){
-    if(this.cache[key]) return this.cache[key];
-    const c=document.createElement('canvas');c.width=img.width;c.height=img.height;
-    const ctx=c.getContext('2d');ctx.drawImage(img,0,0);
-    const data=ctx.getImageData(0,0,c.width,c.height);const p=data.data;
-    for(let i=0;i<p.length;i+=4){
-      const r=p[i],g=p[i+1],b=p[i+2];
-      if(g>100&&g>r*1.4&&g>b*1.2){const gn=Math.min(1,(g-Math.max(r,b))/80);p[i+3]=Math.round(255*(1-gn));}
+// ==================== 精灵帧生成器 ====================
+const SpriteGen={
+  _cache:{},
+  // 绘制火柴人骨架到canvas
+  drawFrame(ctx,cfg,w,h){
+    const cx=w/2,cy=h*0.55;
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.fillStyle='#222';
+    
+    const bodyH=cfg.bodyH||50;
+    const hipY=cy+bodyH*0.3;
+    const headY=cy-bodyH*0.8;
+    
+    // 身体前倾
+    ctx.save();
+    if(cfg.lean){
+      ctx.translate(cx,hipY);ctx.rotate(cfg.lean);ctx.translate(-cx,-hipY);
     }
-    ctx.putImageData(data,0,0);this.cache[key]=c;return c;
+    
+    // 身体线
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx,hipY);ctx.stroke();
+    
+    // 头
+    const headRad=cfg.headRad||14;
+    ctx.beginPath();ctx.arc(cx,headY,headRad,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx-3,headY-2,2.5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(cx+3,headY-2,2.5,0,Math.PI*2);ctx.fill();
+    
+    // 腿
+    const lAng=cfg.lThigh||0.15,rAng=cfg.rThigh||0.15;
+    const lKnee=cfg.lKnee||0.25,rKnee=cfg.rKnee||0.25;
+    const upLen=cfg.upLeg||30,loLen=cfg.loLeg||28;
+    
+    const lKX=cx+Math.sin(lAng)*upLen,lKY=hipY+Math.cos(lAng)*upLen;
+    const lFX=lKX+Math.sin(lAng+lKnee)*loLen,lFY=lKY+Math.cos(lAng+lKnee)*loLen;
+    ctx.strokeStyle='#222';ctx.lineWidth=5;
+    ctx.beginPath();ctx.moveTo(cx,hipY);ctx.lineTo(lKX,lKY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(lKX,lKY);ctx.lineTo(lFX,lFY);ctx.stroke();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKX,lKY,3.5,0,Math.PI*2);ctx.fill();
+    
+    const rKX=cx-Math.sin(rAng)*upLen,rKY=hipY+Math.cos(rAng)*upLen;
+    const rFX=rKX-Math.sin(rAng+rKnee)*loLen,rFY=rKY+Math.cos(rAng+rKnee)*loLen;
+    ctx.beginPath();ctx.moveTo(cx,hipY);ctx.lineTo(rKX,rKY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(rKX,rKY);ctx.lineTo(rFX,rFY);ctx.stroke();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKX,rKY,3.5,0,Math.PI*2);ctx.fill();
+    
+    // 手臂
+    const shY=cy;
+    const aUp=cfg.aUpLen||20,aFore=cfg.aForeLen||20;
+    const fAng=cfg.fArm||0.35,fEl=cfg.fElbow||0.3;
+    const bAng=cfg.bArm||0.35,bEl=cfg.bElbow||0.3;
+    
+    const fEX=cx+Math.cos(Math.PI*fAng)*aUp,fEY=shY-Math.sin(Math.PI*fAng)*aUp;
+    const fHX=fEX+Math.cos(Math.PI*(fAng-fEl))*aFore,fHY=fEY-Math.sin(Math.PI*(fAng-fEl))*aFore;
+    ctx.beginPath();ctx.moveTo(cx,shY);ctx.lineTo(fEX,fEY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(fEX,fEY);ctx.lineTo(fHX,fHY);ctx.stroke();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fEX,fEY,3.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fHX,fHY,4,0,Math.PI*2);ctx.fill();
+    
+    const bEX=cx-Math.cos(Math.PI*bAng)*aUp,bEY=shY-Math.sin(Math.PI*bAng)*aUp;
+    const bHX=bEX-Math.cos(Math.PI*(bAng-bEl))*aFore,bHY=bEY-Math.sin(Math.PI*(bAng-bEl))*aFore;
+    ctx.beginPath();ctx.moveTo(cx,shY);ctx.lineTo(bEX,bEY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(bEX,bEY);ctx.lineTo(bHX,bHY);ctx.stroke();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bEX,bEY,3.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHX,bHY,4,0,Math.PI*2);ctx.fill();
+    
+    cfg._handX=fHX;cfg._handY=fHY;
+    cfg._handAngle=fAng-fEl;
+    
+    // 武器
+    if(cfg.weaponLen){
+      const wLen=cfg.weaponLen,wWid=cfg.weaponWid||5;
+      const angle=Math.PI*(fAng-fEl);
+      const tipX=fHX+Math.cos(angle)*wLen,tipY=fHY-Math.sin(angle)*wLen;
+      const midX=fHX+Math.cos(angle)*wLen*0.4,midY=fHY-Math.sin(angle)*wLen*0.4;
+      ctx.strokeStyle='#8B4513';ctx.lineWidth=wWid*0.6;
+      ctx.beginPath();ctx.moveTo(fHX,fHY);ctx.lineTo(midX,midY);ctx.stroke();
+      ctx.strokeStyle=cfg.weaponColor||'#aaa';ctx.lineWidth=wWid;
+      ctx.beginPath();ctx.moveTo(midX,midY);ctx.lineTo(tipX,tipY);ctx.stroke();
+    }
+    
+    ctx.restore();
+  },
+  
+  // 生成一组动画帧
+  generateFrames(w,h,configs){
+    const frames=[];
+    for(const cfg of configs){
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      this.drawFrame(c.getContext('2d'),cfg,w,h);
+      frames.push(c);
+    }
+    return frames;
+  },
+  
+  // 获取或创建动画
+  getAnim(key,w,h,configs){
+    if(this._cache[key])return this._cache[key];
+    this._cache[key]=this.generateFrames(w,h,configs);
+    return this._cache[key];
   }
 };
 
-// ==================== 资源路径 ====================
-const IMG={
-  player:'assets/images/stickman_player.jpg',
-  enemySword:'assets/images/stickman_enemy_sword.jpg',
-  enemySpear:'assets/images/stickman_enemy_spear.jpg',
-  enemyAxe:'assets/images/stickman_enemy_axe.jpg',
-  boss:'assets/images/stickman_boss.jpg',
-  weaponSword:'assets/images/weapon_sword.jpg',
-  weaponStaff:'assets/images/weapon_staff.jpg',
-  weaponKnife:'assets/images/weapon_knife.jpg',
-  weaponSpear:'assets/images/weapon_spear.jpg',
-  efSwordSlash:'assets/images/effect_sword_slash.jpg',
-  efStaffImpact:'assets/images/effect_staff_impact.jpg',
-  efKnifeSlash:'assets/images/effect_knife_slash.jpg',
-  efSpearThrust:'assets/images/effect_spear_thrust.jpg',
-  efSkillSword:'assets/images/effect_skill_sword.jpg',
-  efSkillStaff:'assets/images/effect_skill_staff.jpg',
-  efSkillKnife:'assets/images/effect_skill_knife.jpg',
-  efSkillSpear:'assets/images/effect_skill_spear.jpg',
+// ==================== 动画配置 ====================
+const ANIM={
+  // 玩家待机 - 呼吸起伏
+  playerIdle(w,h){
+    const frames=[];
+    for(let i=0;i<8;i++){
+      const t=i/8*Math.PI*2;
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:0.15,rThigh:0.15,lKnee:0.25,rKnee:0.25,
+        fArm:0.35,bArm:0.35,fElbow:0.3,bElbow:0.3,
+        lean:0.03, breathBob:Math.sin(t)*2
+      });
+    }
+    return SpriteGen.getAnim('playerIdle',w,h,frames);
+  },
+  
+  // 玩家跑步 - 8帧循环
+  playerRun(w,h){
+    const frames=[];
+    for(let i=0;i<8;i++){
+      const t=i/8*Math.PI*2;
+      const swing=Math.sin(t)*0.55;
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:0.15+swing,rThigh:0.15-swing,
+        lKnee:0.25+Math.abs(swing)*0.5,rKnee:0.25+Math.abs(swing)*0.5,
+        fArm:0.35+swing*0.6,bArm:0.35-swing*0.6,
+        fElbow:0.2+Math.abs(swing)*0.5,bElbow:0.2+Math.abs(swing)*0.5,
+        lean:0.15
+      });
+    }
+    return SpriteGen.getAnim('playerRun',w,h,frames);
+  },
+  
+  // 玩家跳跃
+  playerJump(w,h){
+    const frames=[];
+    for(let i=0;i<4;i++){
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:-0.1,rThigh:0.3,lKnee:0.5,rKnee:0.3,
+        fArm:0.55,bArm:0.55,fElbow:0.4,bElbow:0.4,
+        lean:0.08
+      });
+    }
+    return SpriteGen.getAnim('playerJump',w,h,frames);
+  },
+  
+  // 剑攻击 - 横扫
+  playerAtkSword(w,h){
+    const frames=[];
+    const poses=[{f:0.7,b:-0.4,fe:0.5,be:0.15},{f:0.9,b:-0.3,fe:0.4,be:0.12},{f:1.2,b:-0.1,fe:0.25,be:0.08},{f:1.6,b:-0.1,fe:0.15,be:0.08},{f:1.2,b:0.1,fe:0.25,be:0.12},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:26,weaponWid:5,weaponColor:'#ffdd44'
+      });
+    }
+    return SpriteGen.getAnim('playerAtkSword',w,h,frames);
+  },
+  
+  // 棍攻击 - 下砸
+  playerAtkStaff(w,h){
+    const frames=[];
+    const poses=[{f:-0.5,b:-0.6,fe:0.6,be:0.4},{f:-0.3,b:-0.4,fe:0.4,be:0.3},{f:1.3,b:-0.2,fe:0.15,be:0.08},{f:1.7,b:-0.1,fe:0.1,be:0.08},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:32,weaponWid:4,weaponColor:'#ffaa44'
+      });
+    }
+    return SpriteGen.getAnim('playerAtkStaff',w,h,frames);
+  },
+  
+  // 刀攻击 - 斜劈
+  playerAtkKnife(w,h){
+    const frames=[];
+    const poses=[{f:-0.3,b:-0.3,fe:0.4,be:0.2},{f:-0.1,b:-0.2,fe:0.3,be:0.15},{f:1.0,b:-0.1,fe:0.25,be:0.08},{f:1.4,b:-0.1,fe:0.2,be:0.08},{f:0.8,b:0.1,fe:0.3,be:0.12},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:22,weaponWid:6,weaponColor:'#ff6644'
+      });
+    }
+    return SpriteGen.getAnim('playerAtkKnife',w,h,frames);
+  },
+  
+  // 枪攻击 - 直刺
+  playerAtkSpear(w,h){
+    const frames=[];
+    const poses=[{f:0.35,b:0.35,fe:0.3,be:0.3},{f:0.2,b:0.1,fe:0.15,be:0.1},{f:0.12,b:-0.05,fe:0.05,be:0.05},{f:0.1,b:-0.05,fe:0.05,be:0.05},{f:0.2,b:0.1,fe:0.15,be:0.1},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:34,weaponWid:4,weaponColor:'#88ccff'
+      });
+    }
+    return SpriteGen.getAnim('playerAtkSpear',w,h,frames);
+  },
+  
+  // 玩家技能
+  playerSkill(w,h){
+    const frames=[];
+    const poses=[{f:0.5,b:-0.5,fe:0.4,be:0.3},{f:0.75,b:-0.75,fe:0.55,be:0.4},{f:1.0,b:-0.5,fe:0.3,be:0.2},{f:1.5,b:-0.2,fe:0.15,be:0.08},{f:1.8,b:-0.15,fe:0.1,be:0.08},{f:1.2,b:0.1,fe:0.2,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
+        lThigh:0.28,rThigh:0.05,lKnee:0.25,rKnee:0.05,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:30,weaponWid:5,weaponColor:'#ff6644'
+      });
+    }
+    return SpriteGen.getAnim('playerSkill',w,h,frames);
+  },
+  
+  // 敌人待机
+  enemyIdle(w,h){
+    const frames=[];
+    for(let i=0;i<8;i++){
+      const t=i/8*Math.PI*2;
+      frames.push({
+        bodyH:44,headRad:12,upLeg:26,loLeg:24,aUpLen:17,aForeLen:17,
+        lThigh:0.15,rThigh:0.15,lKnee:0.25,rKnee:0.25,
+        fArm:0.35,bArm:0.35,fElbow:0.3,bElbow:0.3,
+        lean:0.02
+      });
+    }
+    return SpriteGen.getAnim('enemyIdle',w,h,frames);
+  },
+  
+  // 敌人跑步
+  enemyRun(w,h){
+    const frames=[];
+    for(let i=0;i<8;i++){
+      const t=i/8*Math.PI*2;
+      const swing=Math.sin(t)*0.55;
+      frames.push({
+        bodyH:44,headRad:12,upLeg:26,loLeg:24,aUpLen:17,aForeLen:17,
+        lThigh:0.15+swing,rThigh:0.15-swing,
+        lKnee:0.25+Math.abs(swing)*0.5,rKnee:0.25+Math.abs(swing)*0.5,
+        fArm:0.35+swing*0.6,bArm:0.35-swing*0.6,
+        fElbow:0.2+Math.abs(swing)*0.5,bElbow:0.2+Math.abs(swing)*0.5,
+        lean:0.15
+      });
+    }
+    return SpriteGen.getAnim('enemyRun',w,h,frames);
+  },
+  
+  // 敌人攻击
+  enemyAttack(w,h){
+    const frames=[];
+    const poses=[{f:0.6,b:-0.4,fe:0.5,be:0.15},{f:0.9,b:-0.2,fe:0.3,be:0.1},{f:1.5,b:-0.15,fe:0.15,be:0.08},{f:1.0,b:0.1,fe:0.25,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:44,headRad:12,upLeg:26,loLeg:24,aUpLen:17,aForeLen:17,
+        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:18,weaponWid:4,weaponColor:'#ff6644'
+      });
+    }
+    return SpriteGen.getAnim('enemyAttack',w,h,frames);
+  },
+  
+  // BOSS待机
+  bossIdle(w,h){
+    const frames=[];
+    for(let i=0;i<8;i++){
+      const t=i/8*Math.PI*2;
+      frames.push({
+        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
+        lThigh:0.15,rThigh:0.15,lKnee:0.25,rKnee:0.25,
+        fArm:0.35,bArm:0.35,fElbow:0.3,bElbow:0.3,
+        lean:0.02
+      });
+    }
+    return SpriteGen.getAnim('bossIdle',w,h,frames);
+  },
+  
+  // BOSS跑步
+  bossRun(w,h){
+    const frames=[];
+    for(let i=0;i<8;i++){
+      const t=i/8*Math.PI*2;
+      const swing=Math.sin(t)*0.5;
+      frames.push({
+        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
+        lThigh:0.15+swing,rThigh:0.15-swing,
+        lKnee:0.25+Math.abs(swing)*0.45,rKnee:0.25+Math.abs(swing)*0.45,
+        fArm:0.35+swing*0.5,bArm:0.35-swing*0.5,
+        fElbow:0.2+Math.abs(swing)*0.4,bElbow:0.2+Math.abs(swing)*0.4,
+        lean:0.12
+      });
+    }
+    return SpriteGen.getAnim('bossRun',w,h,frames);
+  },
+  
+  // BOSS攻击
+  bossAttack(w,h){
+    const frames=[];
+    const poses=[{f:0.6,b:-0.4,fe:0.5,be:0.15},{f:0.9,b:-0.2,fe:0.3,be:0.1},{f:1.5,b:-0.15,fe:0.15,be:0.08},{f:1.0,b:0.1,fe:0.25,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
+        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:44,weaponWid:10,weaponColor:'#ff8844'
+      });
+    }
+    return SpriteGen.getAnim('bossAttack',w,h,frames);
+  },
+  
+  // BOSS技能
+  bossSkill(w,h){
+    const frames=[];
+    const poses=[{f:-0.5,b:-0.5,fe:0.5,be:0.4},{f:-0.3,b:-0.4,fe:0.4,be:0.3},{f:1.3,b:-0.2,fe:0.15,be:0.08},{f:1.7,b:-0.1,fe:0.1,be:0.08},{f:1.0,b:0.1,fe:0.2,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3},{f:0.35,b:0.35,fe:0.3,be:0.3}];
+    for(const p of poses){
+      frames.push({
+        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
+        lThigh:0.25,rThigh:0.05,lKnee:0.2,rKnee:0.05,
+        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
+        lean:0.05,weaponLen:44,weaponWid:10,weaponColor:'#ff4444'
+      });
+    }
+    return SpriteGen.getAnim('bossSkill',w,h,frames);
+  },
 };
 
-// ==================== 装备配置 ====================
+// ==================== 配置 ====================
+const CFG={
+  PLAYER:{hp:120,baseAtk:18,spd:4.0,jumpForce:12,atkCooldown:0.35,skillCooldown:5,skillDmgMul:2.5},
+  WEAPONS:{
+    sword:{name:'剑',atkMul:1.0,range:60,speed:1.0,color:'#ffdd44',anim:'playerAtkSword',wLen:26,wWid:5},
+    staff:{name:'棍',atkMul:0.8,range:70,speed:1.2,color:'#ffaa44',anim:'playerAtkStaff',wLen:32,wWid:4},
+    knife:{name:'刀',atkMul:1.3,range:45,speed:0.85,color:'#ff6644',anim:'playerAtkKnife',wLen:22,wWid:6},
+    spear:{name:'枪',atkMul:1.1,range:75,speed:0.9,color:'#88ccff',anim:'playerAtkSpear',wLen:34,wWid:4},
+  },
+  ENEMIES:{
+    sword:{name:'剑士',hp:40,atk:8,spd:1.5,atkRange:50,sight:450,atkCd:1.5,dodge:0.3,color:'#c22',jumpChance:0.15,gold:10},
+    spear:{name:'枪兵',hp:35,atk:10,spd:1.8,atkRange:65,sight:480,atkCd:1.8,dodge:0.25,color:'#c44',jumpChance:0.2,gold:12},
+    axe:{name:'斧兵',hp:55,atk:14,spd:1.2,atkRange:40,sight:430,atkCd:2.0,dodge:0.15,color:'#c55',jumpChance:0.1,gold:15},
+  },
+  CHAPTERS:[
+    {id:1,name:'草原',sky:'#87CEEB',ground:'#7ec850',subLevels:[
+      {id:1,name:'草原·1',enemies:[{type:'sword',count:5},{type:'spear',count:1}],boss:false,width:2200},
+      {id:2,name:'草原·2',enemies:[{type:'sword',count:3},{type:'spear',count:2}],boss:false,width:2300},
+      {id:3,name:'草原·3',enemies:[{type:'spear',count:4},{type:'sword',count:1}],boss:false,width:2400},
+      {id:4,name:'草原·4',enemies:[{type:'sword',count:3},{type:'axe',count:3}],boss:false,width:2500},
+      {id:5,name:'草原·BOSS',enemies:[{type:'sword',count:2},{type:'spear',count:2}],boss:true,bossName:'草原之王',width:2000},
+    ]},
+    {id:2,name:'森林',sky:'#5a8a3c',ground:'#4a6a2c',subLevels:[
+      {id:1,name:'森林·1',enemies:[{type:'spear',count:4},{type:'sword',count:2}],boss:false,width:2300},
+      {id:2,name:'森林·2',enemies:[{type:'spear',count:3},{type:'sword',count:3}],boss:false,width:2400},
+      {id:3,name:'森林·3',enemies:[{type:'axe',count:5},{type:'spear',count:1}],boss:false,width:2500},
+      {id:4,name:'森林·4',enemies:[{type:'spear',count:3},{type:'axe',count:3}],boss:false,width:2600},
+      {id:5,name:'森林·BOSS',enemies:[{type:'spear',count:2},{type:'axe',count:2}],boss:true,bossName:'森林守护者',width:2000},
+    ]},
+    {id:3,name:'洞穴',sky:'#3a2a1a',ground:'#5a4a3a',subLevels:[
+      {id:1,name:'洞穴·1',enemies:[{type:'axe',count:4},{type:'spear',count:2}],boss:false,width:2400},
+      {id:2,name:'洞穴·2',enemies:[{type:'axe',count:3},{type:'spear',count:3}],boss:false,width:2500},
+      {id:3,name:'洞穴·3',enemies:[{type:'sword',count:3},{type:'axe',count:3}],boss:false,width:2600},
+      {id:4,name:'洞穴·4',enemies:[{type:'spear',count:4},{type:'axe',count:3}],boss:false,width:2800},
+      {id:5,name:'洞穴·BOSS',enemies:[{type:'axe',count:3}],boss:true,bossName:'洞穴巨兽',width:2000},
+    ]},
+    {id:4,name:'火山',sky:'#cc4400',ground:'#884422',subLevels:[
+      {id:1,name:'火山·1',enemies:[{type:'axe',count:5},{type:'sword',count:2}],boss:false,width:2400},
+      {id:2,name:'火山·2',enemies:[{type:'sword',count:4},{type:'axe',count:3}],boss:false,width:2500},
+      {id:3,name:'火山·3',enemies:[{type:'spear',count:4},{type:'axe',count:3}],boss:false,width:2600},
+      {id:4,name:'火山·4',enemies:[{type:'sword',count:3},{type:'spear',count:3},{type:'axe',count:2}],boss:false,width:2800},
+      {id:5,name:'火山·BOSS',enemies:[{type:'axe',count:2},{type:'spear',count:2}],boss:true,bossName:'熔岩领主',width:2000},
+    ]},
+    {id:5,name:'暗影城堡',sky:'#1a0000',ground:'#2a0a0a',subLevels:[
+      {id:1,name:'城堡·1',enemies:[{type:'sword',count:4},{type:'spear',count:3}],boss:false,width:2400},
+      {id:2,name:'城堡·2',enemies:[{type:'axe',count:5},{type:'sword',count:2}],boss:false,width:2500},
+      {id:3,name:'城堡·3',enemies:[{type:'spear',count:4},{type:'axe',count:3}],boss:false,width:2600},
+      {id:4,name:'城堡·4',enemies:[{type:'sword',count:3},{type:'spear',count:3},{type:'axe',count:3}],boss:false,width:2800},
+      {id:5,name:'城堡·BOSS',enemies:[{type:'sword',count:2},{type:'axe',count:2},{type:'spear',count:2}],boss:true,bossName:'暗影之王',finalBoss:true,width:2000},
+    ]},
+  ],
+  BOSS_CFG:{hp:300,armor:150,atk:20,spd:1.0,atkRange:60,sight:500,atkCd:2.5,stunDuration:2,gold:80},
+  BOSS_SKILLS:{cooldown:8,groundSlam:{range:120,dmg:30,name:'地震踩踏'},charge:{range:200,dmg:25,name:'冲锋撞击'},projectile:{range:300,dmg:20,name:'能量弹'}},
+  LEVEL_COSTS:[0,50,120,250,500,1000,2000,4000,8000,16000],
+  MAX_LEVEL:10,
+  SAVE_KEY:'stickman_rpg_v7',
+};
+
+// ==================== 装备 ====================
 const EQUIP={
   armor:[
     {id:'armor1',name:'布甲',def:10,desc:'减少10%伤害'},
@@ -50,10 +411,10 @@ const EQUIP={
     {id:'armor4',name:'龙鳞甲',def:40,desc:'减少40%伤害'},
   ],
   bracelet:[
-    {id:'brac1',name:'铜镯',regen:1,desc:'每秒回血1点'},
-    {id:'brac2',name:'银镯',regen:3,desc:'每秒回血3点'},
-    {id:'brac3',name:'金镯',regen:5,desc:'每秒回血5点'},
-    {id:'brac4',name:'玉镯',regen:8,desc:'每秒回血8点'},
+    {id:'brac1',name:'铜镯',regen:1,desc:'秒回1血'},
+    {id:'brac2',name:'银镯',regen:3,desc:'秒回3血'},
+    {id:'brac3',name:'金镯',regen:5,desc:'秒回5血'},
+    {id:'brac4',name:'玉镯',regen:8,desc:'秒回8血'},
   ],
   shoes:[
     {id:'shoes1',name:'草鞋',spdBonus:5,desc:'速度+5%'},
@@ -61,73 +422,7 @@ const EQUIP={
     {id:'shoes3',name:'铁靴',spdBonus:15,desc:'速度+15%'},
     {id:'shoes4',name:'风行者',spdBonus:25,desc:'速度+25%'},
   ],
-  dropChance:0.12,
-  bossDropChance:0.6,
-};
-
-// ==================== 配置 ====================
-const CFG={
-  PLAYER:{hp:120,baseAtk:18,spd:4.0,jumpForce:12,atkCooldown:0.35,skillCooldown:5,skillDmgMul:2.5},
-  WEAPONS:{
-    sword:{name:'剑',atkMul:1.0,range:60,speed:1.0,color:'#ffdd44',efSlash:'efSwordSlash',efSkill:'efSkillSword',wLen:26,wWid:5,skillCost:100,animType:'slash'},
-    staff:{name:'棍',atkMul:0.8,range:70,speed:1.2,color:'#ffaa44',efSlash:'efStaffImpact',efSkill:'efSkillStaff',wLen:32,wWid:4,skillCost:120,animType:'smash'},
-    knife:{name:'刀',atkMul:1.3,range:45,speed:0.85,color:'#ff6644',efSlash:'efKnifeSlash',efSkill:'efSkillKnife',wLen:22,wWid:6,skillCost:150,animType:'chop'},
-    spear:{name:'枪',atkMul:1.1,range:75,speed:0.9,color:'#88ccff',efSlash:'efSpearThrust',efSkill:'efSkillSpear',wLen:34,wWid:4,skillCost:130,animType:'thrust'},
-  },
-  ENEMIES:{
-    sword:{name:'剑士',hp:40,atk:8,spd:1.5,atkRange:50,sight:450,atkCd:1.5,dodge:0.3,xp:20,color:'#c22',jumpChance:0.15,gold:10},
-    spear:{name:'枪兵',hp:35,atk:10,spd:1.8,atkRange:65,sight:480,atkCd:1.8,dodge:0.25,xp:25,color:'#c44',jumpChance:0.2,gold:12},
-    axe:{name:'斧兵',hp:55,atk:14,spd:1.2,atkRange:40,sight:430,atkCd:2.0,dodge:0.15,xp:35,color:'#c55',jumpChance:0.1,gold:15},
-  },
-  CHAPTER_COLORS:[
-    ['#cc2222','#cc4444','#cc5555'],
-    ['#22aa44','#33aa55','#44aa66'],
-    ['#8866cc','#9977dd','#aa88ee'],
-    ['#cc6622','#dd7733','#ee8844'],
-    ['#222222','#333344','#444466'],
-  ],
-  BOSS_CFG:{hp:300,armor:150,atk:20,spd:1.0,atkRange:60,sight:500,atkCd:2.5,stunDuration:2,xp:200,gold:80},
-  BOSS_SKILLS:{cooldown:8,groundSlam:{range:120,dmg:30,name:'地震踩踏',color:'#ff8844'},charge:{range:200,dmg:25,name:'冲锋撞击',color:'#ff4444'},projectile:{range:300,dmg:20,name:'能量弹',color:'#ff44ff'}},
-  CHAPTERS:[
-    {id:1,name:'草原',sky:'#87CEEB',ground:'#7ec850',subLevels:[
-      {id:1,name:'草原·1',enemies:[{type:'sword',count:5},{type:'spear',count:1}],boss:false,width:2200,buildings:4},
-      {id:2,name:'草原·2',enemies:[{type:'sword',count:3},{type:'spear',count:2}],boss:false,width:2300,buildings:3},
-      {id:3,name:'草原·3',enemies:[{type:'spear',count:4},{type:'sword',count:1}],boss:false,width:2400,buildings:4},
-      {id:4,name:'草原·4',enemies:[{type:'sword',count:3},{type:'axe',count:3}],boss:false,width:2500,buildings:3},
-      {id:5,name:'草原·BOSS',enemies:[{type:'sword',count:2},{type:'spear',count:2}],boss:true,bossName:'草原之王',width:2000,buildings:2},
-    ]},
-    {id:2,name:'森林',sky:'#5a8a3c',ground:'#4a6a2c',subLevels:[
-      {id:1,name:'森林·1',enemies:[{type:'spear',count:4},{type:'sword',count:2}],boss:false,width:2300,buildings:4},
-      {id:2,name:'森林·2',enemies:[{type:'spear',count:3},{type:'sword',count:3}],boss:false,width:2400,buildings:3},
-      {id:3,name:'森林·3',enemies:[{type:'axe',count:5},{type:'spear',count:1}],boss:false,width:2500,buildings:4},
-      {id:4,name:'森林·4',enemies:[{type:'spear',count:3},{type:'axe',count:3}],boss:false,width:2600,buildings:3},
-      {id:5,name:'森林·BOSS',enemies:[{type:'spear',count:2},{type:'axe',count:2}],boss:true,bossName:'森林守护者',width:2000,buildings:2},
-    ]},
-    {id:3,name:'洞穴',sky:'#3a2a1a',ground:'#5a4a3a',subLevels:[
-      {id:1,name:'洞穴·1',enemies:[{type:'axe',count:4},{type:'spear',count:2}],boss:false,width:2400,buildings:3},
-      {id:2,name:'洞穴·2',enemies:[{type:'axe',count:3},{type:'spear',count:3}],boss:false,width:2500,buildings:3},
-      {id:3,name:'洞穴·3',enemies:[{type:'sword',count:3},{type:'axe',count:3}],boss:false,width:2600,buildings:4},
-      {id:4,name:'洞穴·4',enemies:[{type:'spear',count:4},{type:'axe',count:3}],boss:false,width:2800,buildings:3},
-      {id:5,name:'洞穴·BOSS',enemies:[{type:'axe',count:3}],boss:true,bossName:'洞穴巨兽',width:2000,buildings:2},
-    ]},
-    {id:4,name:'火山',sky:'#cc4400',ground:'#884422',subLevels:[
-      {id:1,name:'火山·1',enemies:[{type:'axe',count:5},{type:'sword',count:2}],boss:false,width:2400,buildings:3},
-      {id:2,name:'火山·2',enemies:[{type:'sword',count:4},{type:'axe',count:3}],boss:false,width:2500,buildings:3},
-      {id:3,name:'火山·3',enemies:[{type:'spear',count:4},{type:'axe',count:3}],boss:false,width:2600,buildings:4},
-      {id:4,name:'火山·4',enemies:[{type:'sword',count:3},{type:'spear',count:3},{type:'axe',count:2}],boss:false,width:2800,buildings:3},
-      {id:5,name:'火山·BOSS',enemies:[{type:'axe',count:2},{type:'spear',count:2}],boss:true,bossName:'熔岩领主',width:2000,buildings:2},
-    ]},
-    {id:5,name:'暗影城堡',sky:'#1a0000',ground:'#2a0a0a',subLevels:[
-      {id:1,name:'城堡·1',enemies:[{type:'sword',count:4},{type:'spear',count:3}],boss:false,width:2400,buildings:4},
-      {id:2,name:'城堡·2',enemies:[{type:'axe',count:5},{type:'sword',count:2}],boss:false,width:2500,buildings:4},
-      {id:3,name:'城堡·3',enemies:[{type:'spear',count:4},{type:'axe',count:3}],boss:false,width:2600,buildings:3},
-      {id:4,name:'城堡·4',enemies:[{type:'sword',count:3},{type:'spear',count:3},{type:'axe',count:3}],boss:false,width:2800,buildings:4},
-      {id:5,name:'城堡·BOSS',enemies:[{type:'sword',count:2},{type:'axe',count:2},{type:'spear',count:2}],boss:true,bossName:'暗影之王',finalBoss:true,width:2000,buildings:2},
-    ]},
-  ],
-  LEVEL_COSTS:[0,50,120,250,500,1000,2000,4000,8000,16000],
-  MAX_LEVEL:10,
-  SAVE_KEY:'stickman_rpg_v6',
+  dropChance:0.12,bossDropChance:0.6,
 };
 
 // ==================== 存档 ====================
@@ -135,8 +430,7 @@ const DB={
   data:{chapter:1,subLevel:1,maxChapter:1,maxSubLevel:1,weapon:'sword',gold:0,playerLevel:1,weaponSkills:{},unlockedWeapons:{sword:true},equippedArmor:null,equippedBracelet:null,equippedShoes:null,inventory:{}},
   init(){
     try{const raw=localStorage.getItem(CFG.SAVE_KEY);if(raw){const d=JSON.parse(raw);this.data=Object.assign(this.data,d);}this.save();}catch(e){}
-    // 迁移旧存档
-    try{const oldRaw=localStorage.getItem('stickman_rpg_v5');if(oldRaw){const od=JSON.parse(oldRaw);if(od.inventory&&(!this.data.inventory||Object.keys(this.data.inventory||{}).length===0)){this.data.inventory=od.inventory;this.data.equippedArmor=od.equippedArmor;this.data.equippedBracelet=od.equippedBracelet;this.data.equippedShoes=od.equippedShoes;}this.save();}}catch(e){}
+    try{const oldRaw=localStorage.getItem('stickman_rpg_v6');if(oldRaw){const od=JSON.parse(oldRaw);if(od.inventory&&(!this.data.inventory||Object.keys(this.data.inventory||{}).length===0)){this.data.inventory=od.inventory;this.data.equippedArmor=od.equippedArmor;this.data.equippedBracelet=od.equippedBracelet;this.data.equippedShoes=od.equippedShoes;}this.save();}}catch(e){}
     if(!this.data.weaponSkills)this.data.weaponSkills={};
     if(!this.data.unlockedWeapons)this.data.unlockedWeapons={sword:true};
     if(!this.data.inventory)this.data.inventory={};
@@ -144,52 +438,13 @@ const DB={
   save(){try{localStorage.setItem(CFG.SAVE_KEY,JSON.stringify(this.data));}catch(e){}},
   addGold(amount){this.data.gold+=amount;this.save();},
   spendGold(amount){if(this.data.gold<amount)return false;this.data.gold-=amount;this.save();return true;},
-  addItem(category,itemId){
-    if(!this.data.inventory[category])this.data.inventory[category]=[];
-    if(!this.data.inventory[category].includes(itemId))this.data.inventory[category].push(itemId);
-    this.save();
-  },
+  addItem(category,itemId){if(!this.data.inventory[category])this.data.inventory[category]=[];if(!this.data.inventory[category].includes(itemId))this.data.inventory[category].push(itemId);this.save();},
   hasItem(category,itemId){return this.data.inventory[category]&&this.data.inventory[category].includes(itemId);},
-  getEquipped(category){
-    if(category==='weapon')return this.data.weapon;
-    const key={armor:'equippedArmor',bracelet:'equippedBracelet',shoes:'equippedShoes'}[category];
-    return key?this.data[key]:null;
-  },
-  equipItem(category,itemId){
-    if(category==='weapon'){this.data.weapon=itemId;this.save();return;}
-    const key={armor:'equippedArmor',bracelet:'equippedBracelet',shoes:'equippedShoes'}[category];
-    if(key){this.data[key]=itemId;this.save();}
-  },
-  getEquipByCategory(category){
-    if(category==='weapon')return CFG.WEAPONS[this.data.weapon]||null;
-    const itemId=this.getEquipped(category);
-    if(!itemId)return null;
-    return EQUIP[category].find(e=>e.id===itemId)||null;
-  },
-  getDefense(){const e=this.getEquipByCategory('armor');return e?e.def:0;},
-  getRegen(){const e=this.getEquipByCategory('bracelet');return e?e.regen:0;},
-  getSpdBonus(){const e=this.getEquipByCategory('shoes');return e?e.spdBonus:0;},
-};
-
-// ==================== 图片加载 ====================
-const Assets={
-  loaded:{},total:0,count:0,
-  loadAll(){
-    const urls=[];for(const k in IMG) urls.push({key:k,url:IMG[k]});
-    this.total=urls.length;
-    return Promise.all(urls.map(item=>this.loadImage(item.key,item.url)));
-  },
-  loadImage(key,url){
-    return new Promise((resolve)=>{
-      const img=new Image();
-      img.onload=()=>{this.loaded[key]=img;ChromaKey.process(img,key);this.count++;const pct=Math.floor(this.progress()*100);
-        const bar=document.getElementById('loadBar'),txt=document.getElementById('loadText');
-        if(bar)bar.style.width=pct+'%';if(txt)txt.textContent='加载中... '+pct+'%';resolve();};
-      img.onerror=()=>{this.count++;resolve();};img.src=url;
-    });
-  },
-  getSprite(key){const img=this.loaded[key];if(!img)return null;return ChromaKey.process(img,key);},
-  progress(){return this.total>0?this.count/this.total:0;}
+  getEquipped(category){if(category==='weapon')return this.data.weapon;const key={armor:'equippedArmor',bracelet:'equippedBracelet',shoes:'equippedShoes'}[category];return key?this.data[key]:null;},
+  equipItem(category,itemId){if(category==='weapon'){this.data.weapon=itemId;this.save();return;}const key={armor:'equippedArmor',bracelet:'equippedBracelet',shoes:'equippedShoes'}[category];if(key){this.data[key]=itemId;this.save();}},
+  getDefense(){const e=this.data.equippedArmor?EQUIP.armor.find(x=>x.id===this.data.equippedArmor):null;return e?e.def:0;},
+  getRegen(){const e=this.data.equippedBracelet?EQUIP.bracelet.find(x=>x.id===this.data.equippedBracelet):null;return e?e.regen:0;},
+  getSpdBonus(){const e=this.data.equippedShoes?EQUIP.shoes.find(x=>x.id===this.data.equippedShoes):null;return e?e.spdBonus:0;},
 };
 
 // ==================== 工具函数 ====================
@@ -198,766 +453,333 @@ function randInt(min,max){return Math.floor(rand(min,max+1));}
 function clamp(v,min,max){return Math.max(min,Math.min(v,max));}
 function dist(a,b){const dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
 function lerp(a,b,t){return a+(b-a)*t;}
+function getChapterScale(c){return 1+(c-1)*0.5;}
 
-// ==================== 粒子系统 ====================
+// ==================== 粒子/飘字/掉落 ====================
 class Particle{
-  constructor(x,y,opts={}){
-    this.x=x;this.y=y;this.vx=opts.vx||rand(-1,1);this.vy=opts.vy||rand(-1,1);
-    this.life=opts.life||0.5;this.maxLife=this.life;this.color=opts.color||'#fff';
-    this.size=opts.size||3;this.dead=false;this.gravity=opts.gravity||0;this.shrink=opts.shrink!==false;
-  }
+  constructor(x,y,opts={}){this.x=x;this.y=y;this.vx=opts.vx||rand(-1,1);this.vy=opts.vy||rand(-1,1);this.life=opts.life||0.5;this.maxLife=this.life;this.color=opts.color||'#fff';this.size=opts.size||3;this.dead=false;this.gravity=opts.gravity||0;this.shrink=opts.shrink!==false;}
   update(dt){this.x+=this.vx*60*dt;this.y+=this.vy*60*dt;this.vy+=this.gravity*60*dt;this.life-=dt;if(this.life<=0)this.dead=true;}
-  draw(ctx,camX){
-    const a=this.life/this.maxLife;ctx.globalAlpha=a;ctx.fillStyle=this.color;
-    const s=this.shrink?this.size*a:this.size;ctx.beginPath();ctx.arc(this.x-camX,this.y,s,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
-  }
+  draw(ctx,camX){const a=this.life/this.maxLife;ctx.globalAlpha=a;ctx.fillStyle=this.color;const s=this.shrink?this.size*a:this.size;ctx.beginPath();ctx.arc(this.x-camX,this.y,s,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;}
 }
-
-// ==================== 飘字系统 ====================
 class FloatingText{
-  constructor(x,y,text,color){
-    this.x=x;this.y=y;this.text=text;this.color=color;
-    this.life=1.2;this.vy=-2.5;this.dead=false;
-  }
+  constructor(x,y,text,color){this.x=x;this.y=y;this.text=text;this.color=color;this.life=1.2;this.vy=-2.5;this.dead=false;}
   update(dt){this.y+=this.vy*60*dt;this.life-=dt;if(this.life<=0)this.dead=true;}
-  draw(ctx,camX){
-    const a=this.life;ctx.globalAlpha=a;ctx.fillStyle=this.color;
-    ctx.font='bold 14px sans-serif';ctx.textAlign='center';
-    ctx.fillText(this.text,this.x-camX,this.y);ctx.textAlign='start';ctx.globalAlpha=1;
-  }
+  draw(ctx,camX){const a=this.life;ctx.globalAlpha=a;ctx.fillStyle=this.color;ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText(this.text,this.x-camX,this.y);ctx.textAlign='start';ctx.globalAlpha=1;}
 }
-
-// ==================== 掉落物品 ====================
 class DropItem{
-  constructor(x,y,category,itemId){
-    this.x=x;this.y=y;this.category=category;this.itemId=itemId;
-    this.life=10;this.dead=false;this.pickupRange=40;
-    const item=EQUIP[category].find(e=>e.id===itemId);
-    this.name=item?item.name:'?';
-    this.color={armor:'#4488ff',bracelet:'#ffcc00',shoes:'#44ff88'}[category]||'#fff';
-  }
-  update(dt,player){
-    this.life-=dt;if(this.life<=0){this.dead=true;return;}
-    const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
-    if(d<this.pickupRange){this.dead=true;this.pickup(player);}
-    else if(d<120){const dx=player.x-this.x,dy=player.y-this.y;const mag=Math.sqrt(dx*dx+dy*dy);this.x+=dx/mag*2*60*dt;this.y+=dy/mag*2*60*dt;}
-  }
+  constructor(x,y,category,itemId){this.x=x;this.y=y;this.category=category;this.itemId=itemId;this.life=10;this.dead=false;this.pickupRange=40;const item=EQUIP[category].find(e=>e.id===itemId);this.name=item?item.name:'?';this.color={armor:'#4488ff',bracelet:'#ffcc00',shoes:'#44ff88'}[category]||'#fff';}
+  update(dt,player){this.life-=dt;if(this.life<=0){this.dead=true;return;}const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.pickupRange){this.dead=true;this.pickup(player);}else if(d<120){const dx=player.x-this.x,dy=player.y-this.y;const mag=Math.sqrt(dx*dx+dy*dy);this.x+=dx/mag*2*60*dt;this.y+=dy/mag*2*60*dt;}}
   pickup(player){player.pickupItem(this.category,this.itemId);}
-  draw(ctx,camX){
-    const a=this.life<1?this.life:1;ctx.globalAlpha=a;
-    const sx=this.x-camX,sy=this.y;
-    ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.stroke();
-    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
-    ctx.fillText(this.name,sx,sy-12);ctx.textAlign='start';ctx.globalAlpha=1;
-  }
+  draw(ctx,camX){const a=this.life<1?this.life:1;ctx.globalAlpha=a;const sx=this.x-camX,sy=this.y;ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(this.name,sx,sy-12);ctx.textAlign='start';ctx.globalAlpha=1;}
 }
 
 // ==================== 背景渲染器 ====================
-class BackgroundRenderer{
-  constructor(sceneCfg){
-    this.scene=sceneCfg;
-    this.buildings=[];this.clouds=[];this.trees=[];this.stars=[];this.lamps=[];
-    this.generateBuildings(sceneCfg.width,sceneCfg.buildings||3);
-    this.generateClouds(sceneCfg.width);
-    this.generateTrees(sceneCfg.width);
-    this.generateStars(sceneCfg.width);
-    this.time=0;
+class Background{
+  constructor(scene){this.scene=scene;this.buildings=[];this.clouds=[];this.trees=[];this.stars=[];this.generate(scene.width);}
+  generate(w){this.buildings=[];this.clouds=[];this.trees=[];this.stars=[];for(let i=0;i<4;i++)this.buildings.push({x:w*0.15+i*(w*0.6/4)+rand(-30,30),w:randInt(60,140),h:randInt(80,200),col:`hsl(${rand(0,360)},${rand(10,30)}%,${rand(20,40)}%)`});for(let i=0;i<8;i++)this.clouds.push({x:rand(0,w),y:rand(30,180),w:rand(60,180),h:rand(20,50)});for(let i=0;i<12;i++)this.trees.push({x:rand(0,w),size:rand(0.5,1.2)});for(let i=0;i<30;i++)this.stars.push({x:rand(0,w),y:rand(0,300),size:rand(0.5,2),tw:rand(0,Math.PI*2)});}
+  draw(ctx,camX,gameW,gameH,groundY,sky){
+    if(this.scene.id>=4){for(const s of this.stars){s.tw+=0.016;ctx.fillStyle=`rgba(255,255,255,${0.3+Math.sin(s.tw)*0.3})`;ctx.beginPath();ctx.arc(s.x-camX*0.1,s.y,s.size,0,Math.PI*2);ctx.fill();}}
+    for(const c of this.clouds){const sx=c.x-camX*0.15;if(sx<-c.w||sx>gameW+c.w)continue;ctx.fillStyle='rgba(255,255,255,0.3)';ctx.beginPath();ctx.ellipse(sx,c.y,c.w/2,c.h/2,0,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle=sky;ctx.fillRect(0,groundY-20,gameW,20);
+    for(const b of this.buildings){const sx=b.x-camX*0.6;if(sx<-b.w-20||sx>gameW+20)continue;const by=groundY-b.h;ctx.fillStyle=b.col;ctx.fillRect(sx,by,b.w,b.h);ctx.fillStyle='#2a1a0a';ctx.fillRect(sx+b.w*0.35,by+b.h*0.6,b.w*0.3,b.h*0.4);}
+    for(const t of this.trees){const sx=t.x-camX*0.5;if(sx<-40||sx>gameW+40)continue;const ty=groundY-60*t.size;ctx.fillStyle='#4a2a0a';ctx.fillRect(sx-5*t.size,ty,10*t.size,60*t.size);ctx.fillStyle='#3a6a2a';ctx.beginPath();ctx.arc(sx,ty-10*t.size,25*t.size,0,Math.PI*2);ctx.fill();}
   }
-  generateBuildings(worldW,count){
-    this.buildings=[];this.lamps=[];
-    for(let i=0;i<count;i++){
-      const b={x:worldW*0.2+i*(worldW*0.6/count)+rand(-30,30),w:randInt(60,140),h:randInt(80,200),
-        color:`hsl(${rand(0,360)},${rand(10,30)}%,${rand(20,40)}%)`,
-        windows:randInt(2,4),windowRows:randInt(2,5),
-        roofColor:`hsl(${rand(0,360)},${rand(30,50)}%,${rand(15,30)}%)`,
-        hasLight:Math.random()>0.3,lightFlicker:Math.random()*Math.PI*2};
-      this.buildings.push(b);
-      if(b.hasLight&&Math.random()>0.4){this.lamps.push({x:b.x+b.w*0.2+rand(0,b.w*0.6),y:b.h*0.5+rand(0,b.h*0.3),flicker:Math.random()*Math.PI*2});}
-    }
-    this.buildings.sort((a,b)=>a.x-b.x);
-  }
-  generateClouds(worldW){this.clouds=[];for(let i=0;i<8;i++)this.clouds.push({x:rand(0,worldW),y:rand(30,180),w:rand(60,180),h:rand(20,50),speed:rand(0.1,0.3)});}
-  generateTrees(worldW){this.trees=[];for(let i=0;i<12;i++)this.trees.push({x:rand(0,worldW),y:rand(0,30),size:rand(0.5,1.2)});}
-  generateStars(worldW){this.stars=[];for(let i=0;i<30;i++)this.stars.push({x:rand(0,worldW),y:rand(0,300),size:rand(0.5,2),twinkle:rand(0,Math.PI*2),speed:rand(0.5,2)});}
-  update(dt){this.time+=dt;}
-  draw(ctx,camX,gameW,gameH,groundY,skyColor){
-    const darkSky=this.scene.boss||this.scene.id>=4;
-    if(darkSky){for(const s of this.stars){s.twinkle+=0.016*s.speed;const alpha=0.3+Math.sin(s.twinkle)*0.3;ctx.fillStyle=`rgba(255,255,255,${alpha})`;ctx.beginPath();ctx.arc(s.x-camX*0.1,s.y,s.size,0,Math.PI*2);ctx.fill();}}
-    if(darkSky){const mx=gameW*0.75-camX*0.05,my=80;ctx.fillStyle='#ffffcc';ctx.beginPath();ctx.arc(mx,my,30,0,Math.PI*2);ctx.fill();ctx.fillStyle=skyColor;ctx.beginPath();ctx.arc(mx+8,my-5,26,0,Math.PI*2);ctx.fill();}
-    if(!darkSky){for(const c of this.clouds){const sx=c.x-camX*0.15;if(sx<-c.w||sx>gameW+c.w)continue;ctx.fillStyle='rgba(255,255,255,0.3)';ctx.beginPath();ctx.ellipse(sx,c.y,c.w/2,c.h/2,0,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(sx-c.w*0.2,c.y+c.h*0.2,c.w*0.35,c.h*0.4,0,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(sx+c.w*0.25,c.y-c.h*0.1,c.w*0.3,c.h*0.35,0,0,Math.PI*2);ctx.fill();}}
-    ctx.fillStyle=this.darkenColor(skyColor,0.3);ctx.beginPath();ctx.moveTo(0,groundY);
-    for(let i=0;i<=gameW+40;i+=40){const h=20+Math.sin((i+camX*0.3)*0.015)*25+Math.sin((i+camX*0.3)*0.04)*10;ctx.lineTo(i,groundY-h);}
-    ctx.lineTo(gameW,groundY);ctx.closePath();ctx.fill();
-    for(const b of this.buildings){
-      const sx=b.x-camX*0.6;if(sx<-b.w-20||sx>gameW+20)continue;const by=groundY-b.h;
-      ctx.fillStyle=b.color;ctx.fillRect(sx,by,b.w,b.h);
-      ctx.fillStyle=b.roofColor;ctx.beginPath();ctx.moveTo(sx-5,by);ctx.lineTo(sx+b.w/2,by-25);ctx.lineTo(sx+b.w+5,by);ctx.closePath();ctx.fill();
-      const ww=b.w/(b.windows+1),wh=b.h/(b.windowRows+1);
-      for(let r=0;r<b.windowRows;r++){for(let c=0;c<b.windows;c++){
-        const wx=sx+ww*(c+1)-ww*0.5,wy=by+wh*(r+0.8);
-        ctx.fillStyle='#1a1a2a';ctx.fillRect(wx-ww*0.3,wy-wh*0.3,ww*0.6,wh*0.4);
-        if(b.hasLight&&Math.random()<0.7){b.lightFlicker+=0.05;const la=0.3+Math.sin(b.lightFlicker+this.time*2)*0.2+Math.sin(b.lightFlicker*1.7+this.time*1.5)*0.15;ctx.fillStyle=`rgba(255,220,150,${la})`;ctx.fillRect(wx-ww*0.25,wy-wh*0.25,ww*0.5,wh*0.3);}
-      }}
-      ctx.fillStyle='#2a1a0a';ctx.fillRect(sx+b.w*0.35,by+b.h*0.6,b.w*0.3,b.h*0.4);
-    }
-    for(const t of this.trees){const sx=t.x-camX*0.5;if(sx<-40||sx>gameW+40)continue;const ty=groundY-60*t.size;ctx.fillStyle='#4a2a0a';ctx.fillRect(sx-5*t.size,ty,10*t.size,60*t.size);ctx.fillStyle='#3a6a2a';ctx.beginPath();ctx.arc(sx,ty-10*t.size,25*t.size,0,Math.PI*2);ctx.fill();ctx.fillStyle='#4a8a3a';ctx.beginPath();ctx.arc(sx-8*t.size,ty-5*t.size,18*t.size,0,Math.PI*2);ctx.fill();ctx.fillStyle='#2a5a2a';ctx.beginPath();ctx.arc(sx+8*t.size,ty-8*t.size,20*t.size,0,Math.PI*2);ctx.fill();}
-  }
-  darkenColor(hex,amount){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return `rgb(${Math.floor(r*(1-amount))},${Math.floor(g*(1-amount))},${Math.floor(b*(1-amount))})`;}
 }
 
-function getChapterScale(chapterId){return 1+(chapterId-1)*0.5;}
-
-// ==================== 玩家类（40x80，武器差异化动画） ====================
+// ==================== 玩家 ====================
 class Player{
   constructor(x,y,level,hp){
-    this.x=x;this.y=y;this.vx=0;this.vy=0;this.width=40;this.height=80;
-    this.level=level||1;
-    this.maxHp=CFG.PLAYER.hp+this.level*10;this.hp=(hp!==undefined&&hp>0)?hp:this.maxHp;
-    this.baseAtk=CFG.PLAYER.baseAtk;this.spd=CFG.PLAYER.spd;
-    this.facingRight=true;this.grounded=false;
+    this.x=x;this.y=y;this.vx=0;this.vy=0;this.w=40;this.h=80;
+    this.level=level||1;this.maxHp=CFG.PLAYER.hp+this.level*10;
+    this.hp=(hp!==undefined&&hp>0)?hp:this.maxHp;
+    this.spd=CFG.PLAYER.spd;this.facingRight=true;this.grounded=false;
     this.atkTimer=0;this.skillTimer=0;this.invulnTimer=0;this.hitFlash=0;
-    this.animState='idle';this.animTimer=0;this.walkCycle=0;this.breathCycle=0;
-    this.attacking=false;this.attackPhase=0;this.skilling=false;this.skillPhase=0;
+    this.state='idle';this.animTimer=0;this.frameIdx=0;this.frameSpeed=8;
+    this.attacking=false;this.skilling=false;
     this.weapon='sword';
-    // 武器轨迹粒子
-    this.weaponTrail=[];
   }
-  getAtkMul(){return 1+(this.level-1)*0.1;}
   getWeaponCfg(){return CFG.WEAPONS[this.weapon]||CFG.WEAPONS.sword;}
-  getAtk(){return Math.floor(this.baseAtk*this.getAtkMul()*this.getWeaponCfg().atkMul);}
+  getAtk(){return Math.floor(CFG.PLAYER.baseAtk*(1+(this.level-1)*0.1)*this.getWeaponCfg().atkMul);}
   getAtkRange(){return this.getWeaponCfg().range;}
   getSpdBonus(){return 1+DB.getSpdBonus()/100;}
   getSkillMul(){return CFG.PLAYER.skillDmgMul*(DB.data.weaponSkills&&DB.data.weaponSkills[this.weapon]?1.3:1.0);}
-  update(dt,joystick,gameW,gameH,worldW,groundY){
-    this.animTimer+=dt;this.atkTimer=Math.max(0,this.atkTimer-dt);this.skillTimer=Math.max(0,this.skillTimer-dt);
+  
+  update(dt,joystick,worldW,groundY){
+    this.animTimer+=dt;this.atkTimer=Math.max(0,this.atkTimer-dt);
+    this.skillTimer=Math.max(0,this.skillTimer-dt);
     this.invulnTimer=Math.max(0,this.invulnTimer-dt);this.hitFlash=Math.max(0,this.hitFlash-dt);
-    this.breathCycle+=dt*2.5;
     const wcfg=this.getWeaponCfg();
     this.vx=joystick.dx*this.spd*wcfg.speed*this.getSpdBonus();
     if(Math.abs(this.vx)>0.1)this.facingRight=this.vx>0;
-    if(Math.abs(this.vx)>0.3&&this.grounded&&!this.attacking&&!this.skilling)this.walkCycle+=dt*7;
-    else if(this.grounded&&!this.attacking&&!this.skilling)this.walkCycle=lerp(this.walkCycle,0,0.3);
     if(joystick.jumpPressed&&this.grounded&&!this.attacking&&!this.skilling){this.vy=-CFG.PLAYER.jumpForce;this.grounded=false;joystick.jumpPressed=false;}
     this.vy+=25*dt;this.x+=this.vx*60*dt;this.y+=this.vy*60*dt;
-    if(this.y+this.height/2>=groundY){this.y=groundY-this.height/2;this.vy=0;this.grounded=true;}else this.grounded=false;
-    this.x=clamp(this.x,this.width/2,worldW-this.width/2);if(this.y<-100)this.y=-100;
-    if(this.attacking){this.attackPhase+=dt*10;if(this.attackPhase>=3){this.attacking=false;this.attackPhase=0;}}
-    if(this.skilling){this.skillPhase+=dt*6;if(this.skillPhase>=3){this.skilling=false;this.skillPhase=0;}}
-    if(this.hitFlash>0)this.animState='hurt';else if(this.skilling)this.animState='skill';else if(this.attacking)this.animState='attack';else if(!this.grounded)this.animState='jump';else if(Math.abs(this.vx)>0.3)this.animState='walk';else this.animState='idle';
-    // 更新武器轨迹
-    for(let i=this.weaponTrail.length-1;i>=0;i--){this.weaponTrail[i].life-=dt*3;if(this.weaponTrail[i].life<=0)this.weaponTrail.splice(i,1);}
+    if(this.y+this.h/2>=groundY){this.y=groundY-this.h/2;this.vy=0;this.grounded=true;}else this.grounded=false;
+    this.x=clamp(this.x,this.w/2,worldW-this.w/2);
+    // 状态机
+    if(this.hitFlash>0)this.state='hurt';
+    else if(this.skilling)this.state='skill';
+    else if(this.attacking)this.state='attack';
+    else if(!this.grounded)this.state='jump';
+    else if(Math.abs(this.vx)>0.3)this.state='run';
+    else this.state='idle';
+    // 帧更新
+    this.frameIdx+=dt*this.frameSpeed;
+    const maxFrames=this.getMaxFrames();
+    if(this.frameIdx>=maxFrames)this.frameIdx-=maxFrames;
+    if(this.attacking&&this.frameIdx>=maxFrames-1){this.attacking=false;this.frameIdx=0;}
+    if(this.skilling&&this.frameIdx>=maxFrames-1){this.skilling=false;this.frameIdx=0;}
   }
-  attack(){if(this.atkTimer>0||this.attacking)return null;this.atkTimer=this.getWeaponCfg().speed*CFG.PLAYER.atkCooldown;this.attacking=true;this.attackPhase=0;const dir=this.facingRight?1:-1;return {x:this.x+dir*30,y:this.y-5,w:this.getAtkRange(),h:50,damage:this.getAtk(),knockback:dir*5,color:this.getWeaponCfg().color,weapon:this.weapon};}
-  skill(){if(this.skillTimer>0||this.skilling)return null;this.skillTimer=CFG.PLAYER.skillCooldown;this.skilling=true;this.skillPhase=0;const dir=this.facingRight?1:-1;return {x:this.x+dir*35,y:this.y-15,w:this.getAtkRange()*1.5,h:70,damage:Math.floor(this.getAtk()*this.getSkillMul()),knockback:dir*10,color:'#ff6644',isSkill:true,weapon:this.weapon};}
-  takeDamage(dmg){if(this.invulnTimer>0)return;const def=DB.getDefense();const actualDmg=Math.floor(dmg*(1-def/100));this.hp-=actualDmg;this.invulnTimer=0.3;this.hitFlash=0.15;this.vy=-3;if(this.hp<=0)this.hp=0;}
-  pickupItem(category,itemId){
-    DB.addItem(category,itemId);
-    const items=EQUIP[category];
-    const currentId=DB.getEquipped(category);
-    const newIdx=items.findIndex(e=>e.id===itemId);
-    const curIdx=currentId?items.findIndex(e=>e.id===currentId):-1;
-    if(newIdx>curIdx)DB.equipItem(category,itemId);
+  
+  getMaxFrames(){
+    switch(this.state){
+      case 'idle':return 8;
+      case 'run':return 8;
+      case 'jump':return 4;
+      case 'attack':return 6;
+      case 'skill':return 8;
+      default:return 8;
+    }
   }
-  draw(ctx,camX,groundY){
+  
+  getCurrentFrames(){
+    if(this.state==='attack'){
+      const animKey=this.getWeaponCfg().anim||'playerAtkSword';
+      return ANIM[animKey](this.w,this.h);
+    }
+    if(this.state==='skill')return ANIM.playerSkill(this.w,this.h);
+    if(this.state==='run')return ANIM.playerRun(this.w,this.h);
+    if(this.state==='jump')return ANIM.playerJump(this.w,this.h);
+    return ANIM.playerIdle(this.w,this.h);
+  }
+  
+  attack(){if(this.atkTimer>0||this.attacking)return null;this.atkTimer=this.getWeaponCfg().speed*CFG.PLAYER.atkCooldown;this.attacking=true;this.frameIdx=0;const dir=this.facingRight?1:-1;return {x:this.x+dir*30,y:this.y-5,w:this.getAtkRange(),h:40,damage:this.getAtk(),knockback:dir*5,color:this.getWeaponCfg().color};}
+  skill(){if(this.skillTimer>0||this.skilling)return null;this.skillTimer=CFG.PLAYER.skillCooldown;this.skilling=true;this.frameIdx=0;const dir=this.facingRight?1:-1;return {x:this.x+dir*35,y:this.y-15,w:this.getAtkRange()*1.5,h:60,damage:Math.floor(this.getAtk()*this.getSkillMul()),knockback:dir*10,color:'#ff6644',isSkill:true};}
+  takeDamage(dmg){if(this.invulnTimer>0)return;const def=DB.getDefense();this.hp-=Math.floor(dmg*(1-def/100));this.invulnTimer=0.3;this.hitFlash=0.15;this.vy=-3;if(this.hp<=0)this.hp=0;}
+  pickupItem(category,itemId){DB.addItem(category,itemId);const items=EQUIP[category];const currentId=DB.getEquipped(category);const newIdx=items.findIndex(e=>e.id===itemId);const curIdx=currentId?items.findIndex(e=>e.id===currentId):-1;if(newIdx>curIdx)DB.equipItem(category,itemId);}
+  
+  draw(ctx,camX){
     if(this.invulnTimer>0&&Math.floor(this.invulnTimer*20)%2===0)return;
-    const sx=this.x-camX,sy=this.y;
-    ctx.save();ctx.translate(sx,sy);
-    if(!this.facingRight)ctx.scale(-1,1);
-    if(this.hitFlash>0){ctx.globalAlpha=0.5+Math.sin(this.hitFlash*30)*0.3;}
-    this.drawStickman(ctx,0,0);
-    ctx.restore();
-    // 画武器轨迹
-    for(const t of this.weaponTrail){
-      ctx.globalAlpha=t.life*0.5;ctx.strokeStyle=t.color;ctx.lineWidth=t.size;ctx.lineCap='round';
-      ctx.beginPath();ctx.moveTo(t.x1-camX,t.y1);ctx.lineTo(t.x2-camX,t.y2);ctx.stroke();
-    }
-    ctx.globalAlpha=1;
-    if(this.attacking&&this.attackPhase>1.0&&this.attackPhase<1.3)this.drawWeaponEffect(ctx,camX,false);
-    if(this.skilling&&this.skillPhase>1.0&&this.skillPhase<1.5)this.drawWeaponEffect(ctx,camX,true);
-  }
-  drawWeaponEffect(ctx,camX,isSkill){
-    const wcfg=this.getWeaponCfg();const key=isSkill?wcfg.efSkill:wcfg.efSlash;const spr=Assets.getSprite(key);
-    const dir=this.facingRight?1:-1;
-    const ex=this.x+dir*50,ey=this.y-15;
-    if(spr){ctx.save();ctx.globalAlpha=0.8;ctx.drawImage(spr,ex-camX-50,ey-50,100,100);ctx.restore();}
-    else{ctx.save();ctx.globalAlpha=0.6;ctx.fillStyle=isSkill?'rgba(255,100,50,0.5)':'rgba(255,200,80,0.4)';ctx.beginPath();ctx.arc(ex-camX,ey,isSkill?60:40,0,Math.PI*2);ctx.fill();ctx.restore();}
-  }
-  drawStickman(ctx,ox,oy){
-    const h=this.height,bodyLen=h*0.28;
-    const breathBob=this.animState==='idle'?Math.sin(this.breathCycle)*2.5:0;
-    const by=oy+breathBob;
-    const leanAngle=this.animState==='walk'?0.15:(this.animState==='jump'?0.08:0.03);
+    const frames=this.getCurrentFrames();
+    const idx=Math.floor(this.frameIdx)%frames.length;
+    const frame=frames[idx];
+    const sx=this.x-camX-this.w/2,sy=this.y-this.h/2;
     ctx.save();
-    const hipY=by+bodyLen*0.7;
-    ctx.translate(ox,hipY);ctx.rotate(leanAngle);ctx.translate(-ox,-hipY);
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';
-    ctx.beginPath();ctx.moveTo(ox,by-bodyLen*0.3);ctx.lineTo(ox,by+bodyLen*0.7);ctx.stroke();
-    const armor=DB.getEquipByCategory('armor');
-    if(armor){ctx.strokeStyle=armor.def>=30?'#6677aa':armor.def>=20?'#999':'#bbb';ctx.lineWidth=3;ctx.strokeRect(ox-14,by-bodyLen*0.15-2,28,bodyLen*1.0);ctx.strokeStyle='#222';ctx.lineWidth=5;}
-    const headBob=this.animState==='idle'?Math.sin(this.animTimer*3)*1.5:0;
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(ox,by-bodyLen*0.3-9+headBob,11,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ox-4,by-bodyLen*0.3-11+headBob,2.5,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(ox+4,by-bodyLen*0.3-11+headBob,2.5,0,Math.PI*2);ctx.fill();
-    if(this.animState==='hurt'){ctx.fillStyle='#f44';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillText('x',ox,by-bodyLen*0.3-16+headBob);ctx.textAlign='start';}
-    const shoes=DB.getEquipByCategory('shoes');
-    if(shoes&&this.grounded){
-      ctx.fillStyle=shoes.spdBonus>=25?'#ff8822':shoes.spdBonus>=15?'#6677aa':shoes.spdBonus>=10?'#996644':'#88aa66';
-      ctx.fillRect(ox-6,by+bodyLen*0.7+bodyLen*0.8+bodyLen*0.7-5,12,6);
-      ctx.fillRect(ox-14,by+bodyLen*0.7+bodyLen*0.8+bodyLen*0.7-5,12,6);
-    }
+    if(!this.facingRight){ctx.translate(this.x-camX,0);ctx.scale(-1,1);ctx.translate(-(this.x-camX),0);}
+    if(this.hitFlash>0&&this.state!=='hurt')ctx.globalAlpha=0.5;
+    ctx.drawImage(frame,sx,sy,this.w,this.h);
     ctx.restore();
-    this.drawLegs(ctx,ox,by,bodyLen,h);
-    this.drawArms(ctx,ox,by,bodyLen);
+    this.drawHealthBar(ctx,camX);
   }
-  drawLegs(ctx,ox,oy,bodyLen,h){
-    const hipY=oy+bodyLen*0.7;
-    const upperLen=bodyLen*0.9,lowerLen=bodyLen*0.8;
-    let lThighAngle=0.15,rThighAngle=0.15;
-    let lKneeAngle=0.25,rKneeAngle=0.25;
-    if(this.animState==='walk'){
-      const swing=Math.sin(this.walkCycle)*0.55;
-      lThighAngle=0.15+swing;rThighAngle=0.15-swing;
-      lKneeAngle=0.25+Math.abs(swing)*0.5;rKneeAngle=0.25+Math.abs(swing)*0.5;
-    }else if(this.animState==='jump'){
-      lThighAngle=-0.1;rThighAngle=0.3;lKneeAngle=0.5;rKneeAngle=0.3;
-    }else if(this.animState==='attack'){
-      lThighAngle=0.22;rThighAngle=0.1;lKneeAngle=0.1;rKneeAngle=0.1;
-    }else if(this.animState==='skill'){
-      lThighAngle=0.28;rThighAngle=0.05;lKneeAngle=0.25;rKneeAngle=0.05;
-    }
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
-    const lKneeX=ox+Math.sin(lThighAngle)*upperLen;
-    const lKneeY=hipY+Math.cos(lThighAngle)*upperLen;
-    const lFootX=lKneeX+Math.sin(lThighAngle+lKneeAngle)*lowerLen;
-    const lFootY=lKneeY+Math.cos(lThighAngle+lKneeAngle)*lowerLen;
-    ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(lKneeX,lKneeY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(lKneeX,lKneeY);ctx.lineTo(lFootX,lFootY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKneeX,lKneeY,3.5,0,Math.PI*2);ctx.fill();
-    const rKneeX=ox-Math.sin(rThighAngle)*upperLen;
-    const rKneeY=hipY+Math.cos(rThighAngle)*upperLen;
-    const rFootX=rKneeX-Math.sin(rThighAngle+rKneeAngle)*lowerLen;
-    const rFootY=rKneeY+Math.cos(rThighAngle+rKneeAngle)*lowerLen;
-    ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(rKneeX,rKneeY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(rKneeX,rKneeY);ctx.lineTo(rFootX,rFootY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKneeX,rKneeY,3.5,0,Math.PI*2);ctx.fill();
-  }
-  drawArms(ctx,ox,oy,bodyLen){
-    const shoulderY=oy-bodyLen*0.1;
-    const upperLen=bodyLen*0.55,foreLen=bodyLen*0.55;
-    let fUpAngle=0.35,fElbow=0.3,bUpAngle=0.35,bElbow=0.3;
-    if(this.animState==='walk'){
-      const swing=Math.sin(this.walkCycle)*0.35;
-      fUpAngle=0.35+swing;bUpAngle=0.35-swing;
-      fElbow=0.2+Math.abs(swing)*0.5;bElbow=0.2+Math.abs(swing)*0.5;
-    }else if(this.animState==='jump'){fUpAngle=0.55;bUpAngle=0.55;fElbow=0.4;bElbow=0.4;}
-    else if(this.animState==='attack'){this.getAttackArmAngles();return;}
-    else if(this.animState==='skill'){this.getSkillArmAngles();return;}
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
-    const fElbowX=ox+Math.cos(Math.PI*fUpAngle)*upperLen;
-    const fElbowY=shoulderY-Math.sin(Math.PI*fUpAngle)*upperLen;
-    const fHandX=fElbowX+Math.cos(Math.PI*(fUpAngle-fElbow))*foreLen;
-    const fHandY=fElbowY-Math.sin(Math.PI*(fUpAngle-fElbow))*foreLen;
-    ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(fElbowX,fElbowY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(fElbowX,fElbowY);ctx.lineTo(fHandX,fHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fElbowX,fElbowY,3.5,0,Math.PI*2);ctx.fill();
-    const bracelet=DB.getEquipByCategory('bracelet');
-    if(bracelet){ctx.strokeStyle=bracelet.regen>=8?'#ffcc00':bracelet.regen>=5?'#ffaa00':bracelet.regen>=3?'#ff8800':'#ff6600';ctx.lineWidth=3;ctx.beginPath();ctx.arc(fHandX,fHandY,6,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#222';}
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fHandX,fHandY,4,0,Math.PI*2);ctx.fill();
-    const bElbowX=ox-Math.cos(Math.PI*bUpAngle)*upperLen;
-    const bElbowY=shoulderY-Math.sin(Math.PI*bUpAngle)*upperLen;
-    const bHandX=bElbowX-Math.cos(Math.PI*(bUpAngle-bElbow))*foreLen;
-    const bHandY=bElbowY-Math.sin(Math.PI*(bUpAngle-bElbow))*foreLen;
-    ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(bElbowX,bElbowY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(bElbowX,bElbowY);ctx.lineTo(bHandX,bHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bElbowX,bElbowY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHandX,bHandY,4,0,Math.PI*2);ctx.fill();
-    const weaponActive=this.animState==='attack'||this.animState==='skill';
-    const phase=weaponActive?(this.animState==='skill'?this.skillPhase:this.attackPhase):0;
-    this.drawWeaponOnHand(ctx,fHandX,fHandY,fUpAngle-fElbow,weaponActive,phase);
-  }
-  getAttackArmAngles(){
-    const wcfg=this.getWeaponCfg();
-    const animType=wcfg.animType||'slash';
-    const ox=0,oy=0,bodyLen=28*0.28;
-    const shoulderY=oy-bodyLen*0.1;
-    const upperLen=bodyLen*0.55,foreLen=bodyLen*0.55;
-    let fUpAngle=0.35,fElbow=0.3,bUpAngle=0.35,bElbow=0.3;
-    const phase=this.attackPhase;
-    let fHandX,fHandY,bHandX,bHandY;
-    // 根据武器类型选择不同的攻击动画
-    if(animType==='slash'){
-      // 剑：横扫弧形 - 手臂从右到左幅度大
-      if(phase<1){fUpAngle=0.7;bUpAngle=-0.4;fElbow=0.5;bElbow=0.15;}
-      else if(phase<2){fUpAngle=1.6;bUpAngle=-0.15;fElbow=0.15;bElbow=0.08;} // 大幅横扫
-      else{fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;}
-    }else if(animType==='smash'){
-      // 棍：高举下砸
-      if(phase<1){fUpAngle=-0.6;bUpAngle=-0.6;fElbow=0.6;bElbow=0.4;} // 高举
-      else if(phase<2){fUpAngle=1.7;bUpAngle=-0.2;fElbow=0.1;bElbow=0.08;} // 下砸
-      else{fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;}
-    }else if(animType==='chop'){
-      // 刀：斜劈
-      if(phase<1){fUpAngle=-0.3;bUpAngle=-0.3;fElbow=0.4;bElbow=0.2;}
-      else if(phase<2){fUpAngle=1.4;bUpAngle=-0.1;fElbow=0.2;bElbow=0.08;} // 斜劈
-      else{fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;}
-    }else if(animType==='thrust'){
-      // 枪：直刺
-      if(phase<0.5){fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;} // 准备
-      else if(phase<1.5){fUpAngle=0.15;bUpAngle=-0.1;fElbow=0.05;bElbow=0.05;} // 直刺
-      else if(phase<2){fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;} // 收回
-      else{fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;}
-    }
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
-    const fElbowX=ox+Math.cos(Math.PI*fUpAngle)*upperLen;
-    const fElbowY=shoulderY-Math.sin(Math.PI*fUpAngle)*upperLen;
-    fHandX=fElbowX+Math.cos(Math.PI*(fUpAngle-fElbow))*foreLen;
-    fHandY=fElbowY-Math.sin(Math.PI*(fUpAngle-fElbow))*foreLen;
-    ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(fElbowX,fElbowY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(fElbowX,fElbowY);ctx.lineTo(fHandX,fHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fElbowX,fElbowY,3.5,0,Math.PI*2);ctx.fill();
-    const bracelet=DB.getEquipByCategory('bracelet');
-    if(bracelet){ctx.strokeStyle=bracelet.regen>=8?'#ffcc00':bracelet.regen>=5?'#ffaa00':bracelet.regen>=3?'#ff8800':'#ff6600';ctx.lineWidth=3;ctx.beginPath();ctx.arc(fHandX,fHandY,6,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#222';}
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fHandX,fHandY,4,0,Math.PI*2);ctx.fill();
-    const bElbowX=ox-Math.cos(Math.PI*bUpAngle)*upperLen;
-    const bElbowY=shoulderY-Math.sin(Math.PI*bUpAngle)*upperLen;
-    bHandX=bElbowX-Math.cos(Math.PI*(bUpAngle-bElbow))*foreLen;
-    bHandY=bElbowY-Math.sin(Math.PI*(bUpAngle-bElbow))*foreLen;
-    ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(bElbowX,bElbowY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(bElbowX,bElbowY);ctx.lineTo(bHandX,bHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bElbowX,bElbowY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHandX,bHandY,4,0,Math.PI*2);ctx.fill();
-    // 武器轨迹
-    if(phase>0.4&&phase<2.0){
-      const wcfg2=this.getWeaponCfg();
-      const tipX=fHandX+Math.cos(Math.PI*(fUpAngle-fElbow))*wcfg2.wLen;
-      const tipY=fHandY-Math.sin(Math.PI*(fUpAngle-fElbow))*wcfg2.wLen;
-      this.weaponTrail.push({x1:tipX,x2:tipX+rand(-5,5),y1:tipY+rand(-3,3),y2:tipY+rand(-3,3),life:1,color:wcfg2.color,size:rand(3,6)});
-      if(this.weaponTrail.length>20)this.weaponTrail.shift();
-    }
-    this.drawWeaponOnHand(ctx,fHandX,fHandY,fUpAngle-fElbow,true,phase);
-  }
-  getSkillArmAngles(){
-    const ox=0,oy=0,bodyLen=28*0.28;
-    const shoulderY=oy-bodyLen*0.1;
-    const upperLen=bodyLen*0.55,foreLen=bodyLen*0.55;
-    let fUpAngle=0.35,fElbow=0.3,bUpAngle=0.35,bElbow=0.3;
-    const phase=this.skillPhase;
-    if(phase<1){fUpAngle=0.75;bUpAngle=-0.75;fElbow=0.55;bElbow=0.4;}
-    else if(phase<2){fUpAngle=1.8;bUpAngle=-0.25;fElbow=0.1;bElbow=0.08;}
-    else{fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;}
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
-    const fElbowX=ox+Math.cos(Math.PI*fUpAngle)*upperLen;
-    const fElbowY=shoulderY-Math.sin(Math.PI*fUpAngle)*upperLen;
-    const fHandX=fElbowX+Math.cos(Math.PI*(fUpAngle-fElbow))*foreLen;
-    const fHandY=fElbowY-Math.sin(Math.PI*(fUpAngle-fElbow))*foreLen;
-    ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(fElbowX,fElbowY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(fElbowX,fElbowY);ctx.lineTo(fHandX,fHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fElbowX,fElbowY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fHandX,fHandY,4,0,Math.PI*2);ctx.fill();
-    const bElbowX=ox-Math.cos(Math.PI*bUpAngle)*upperLen;
-    const bElbowY=shoulderY-Math.sin(Math.PI*bUpAngle)*upperLen;
-    const bHandX=bElbowX-Math.cos(Math.PI*(bUpAngle-bElbow))*foreLen;
-    const bHandY=bElbowY-Math.sin(Math.PI*(bUpAngle-bElbow))*foreLen;
-    ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(bElbowX,bElbowY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(bElbowX,bElbowY);ctx.lineTo(bHandX,bHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bElbowX,bElbowY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHandX,bHandY,4,0,Math.PI*2);ctx.fill();
-    this.drawWeaponOnHand(ctx,fHandX,fHandY,fUpAngle-fElbow,true,phase);
-  }
-  drawWeaponOnHand(ctx,hx,hy,armAngle,active,phase){
-    const wcfg=this.getWeaponCfg();
-    const wLen=wcfg.wLen,wWid=wcfg.wWid;
-    const angle=Math.PI*armAngle;
-    const tipX=hx+Math.cos(angle)*wLen,tipY=hy-Math.sin(angle)*wLen;
-    const midX=hx+Math.cos(angle)*wLen*0.4,midY=hy-Math.sin(angle)*wLen*0.4;
-    ctx.strokeStyle='#8B4513';ctx.lineWidth=wWid*0.6;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(midX,midY);ctx.stroke();
-    if(active){ctx.strokeStyle=this.animState==='skill'?'#ff4466':wcfg.color;ctx.lineWidth=this.animState==='skill'?wWid+2:wWid;}
-    else{ctx.strokeStyle='#aaa';ctx.lineWidth=wWid;}
-    ctx.beginPath();ctx.moveTo(midX,midY);ctx.lineTo(tipX,tipY);ctx.stroke();
-    if(active&&phase>0.3){ctx.fillStyle='rgba(255,200,100,0.6)';ctx.beginPath();ctx.arc(tipX,tipY,active?7:4,0,Math.PI*2);ctx.fill();}
-    ctx.strokeStyle='#222';ctx.lineWidth=5;
-  }
+  
   drawHealthBar(ctx,camX){
-    const sx=this.x-camX,sy=this.y-this.height/2-25;const bw=50,bh=6;
+    const sx=this.x-camX,sy=this.y-this.h/2-20;const bw=50,bh=6;
     ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy,bw,bh);
-    const hpR=this.hp/this.maxHp;const hpGrad=ctx.createLinearGradient(sx-bw/2,0,sx+bw/2,0);hpGrad.addColorStop(0,'#ff3333');hpGrad.addColorStop(0.5,'#ff8833');hpGrad.addColorStop(1,'#44cc44');
-    ctx.fillStyle=hpGrad;ctx.fillRect(sx-bw/2,sy,bw*hpR,bh);
-    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(Math.ceil(this.hp)+'/'+this.maxHp,sx,sy-2);ctx.textAlign='start';
+    const hpR=this.hp/this.maxHp;ctx.fillStyle=hpR>0.5?'#44cc44':hpR>0.25?'#ff8833':'#ff3333';
+    ctx.fillRect(sx-bw/2,sy,bw*hpR,bh);
+    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(Math.ceil(this.hp),sx,sy-2);ctx.textAlign='start';
   }
 }
 
-// ==================== 敌人类 ====================
+// ==================== 敌人 ====================
 class Enemy{
   constructor(type,x,y,groundY,idx,chapterId){
     const cfg=CFG.ENEMIES[type];this.cfg=cfg;this.type=type;this.name=cfg.name;
     const scale=getChapterScale(chapterId||1);
-    this.x=x;this.y=y;this.groundY=groundY;
+    this.x=x;this.y=y;this.groundY=groundY;this.w=36;this.h=70;
     this.maxHp=Math.floor(cfg.hp*scale);this.hp=this.maxHp;
-    this.atk=Math.floor(cfg.atk*scale);this.spd=cfg.spd;
-    this.atkRange=cfg.atkRange;this.sight=cfg.sight;
-    this.atkCd=cfg.atkCd;this.dodge=cfg.dodge;
+    this.atk=Math.floor(cfg.atk*scale);this.spd=cfg.spd;this.atkRange=cfg.atkRange;
+    this.sight=cfg.sight;this.atkCd=cfg.atkCd;this.dodge=cfg.dodge;
     this.jumpChance=cfg.jumpChance||0.15;this.goldReward=cfg.gold||10;
-    this.width=36;this.height=70;this.facingRight=false;this.vx=0;this.vy=0;
+    this.facingRight=false;this.vx=0;this.vy=0;
     this.state='patrol';this.stateTimer=rand(0.2,0.6);this.atkTimer=0;
     this.hitFlash=0;this.hitStunTimer=0;this.dead=false;this.deathTimer=0;this.fullyRemoved=false;
-    this.attacking=false;this.attackPhase=0;this.grounded=true;
+    this.attacking=false;this.grounded=true;
     this.patrolDir=rand(0,1)<0.5?-1:1;this.patrolBase=this.x;
-    this.animTimer=rand(0,10);this.walkCycle=0;this.idx=idx||0;this.breathCycle=rand(0,6);
-    this.jumpCooldown=0;this.flankDir=rand(0,1)<0.5?-1:1;
-    this.aggressiveTimer=rand(0,1);
-    const colors=CFG.CHAPTER_COLORS[(chapterId||1)-1]||CFG.CHAPTER_COLORS[0];
-    this.headColor=colors[this.idx%3];
+    this.idx=idx||0;this.walkCycle=0;this.breathCycle=rand(0,6);
+    this.jumpCooldown=0;this.flankDir=rand(0,1)<0.5?-1:1;this.aggressiveTimer=rand(0,1);
+    this.animTimer=0;this.frameIdx=0;this.frameSpeed=8;
   }
-  update(dt,player,playerAttacking,allEnemies){
+  
+  update(dt,player,playerAttacking){
     if(this.dead){this.deathTimer+=dt;if(this.deathTimer>0.6)this.fullyRemoved=true;return;}
     this.animTimer+=dt;this.breathCycle+=dt*2.5;
     this.atkTimer=Math.max(0,this.atkTimer-dt);
     this.hitFlash=Math.max(0,this.hitFlash-dt);this.hitStunTimer=Math.max(0,this.hitStunTimer-dt);
-    this.jumpCooldown=Math.max(0,this.jumpCooldown-dt);
-    this.aggressiveTimer-=dt;
+    this.jumpCooldown=Math.max(0,this.jumpCooldown-dt);this.aggressiveTimer-=dt;
     if(this.hitStunTimer>0){this.state='hitstun';this.vx*=0.9;this.x+=this.vx*60*dt;return;}
     const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
     this.facingRight=player.x>this.x;
-    const playerJumping=!player.grounded;
-    const playerClose=d<70;
-    let flankOffset=this.flankDir*50;
-    if(this.aggressiveTimer<=0&&d<this.sight){
-      this.aggressiveTimer=rand(1,3);
-      this.flankDir=rand(0,1)<0.5?-1:1;
-    }
+    const playerClose=d<70;let flankOffset=this.flankDir*50;
+    if(this.aggressiveTimer<=0&&d<this.sight){this.aggressiveTimer=rand(1,3);this.flankDir=rand(0,1)<0.5?-1:1;}
     switch(this.state){
       case 'idle':
-        this.vx=0;this.walkCycle=lerp(this.walkCycle,0,0.3);
-        this.stateTimer-=dt;if(this.stateTimer<=0){this.state='patrol';this.stateTimer=rand(0.8,2.5);this.patrolDir=rand(0,1)<0.5?-1:1;}
+        this.vx=0;this.stateTimer-=dt;if(this.stateTimer<=0){this.state='patrol';this.stateTimer=rand(0.8,2.5);this.patrolDir=rand(0,1)<0.5?-1:1;}
         if(d<this.sight)this.state='chase';break;
       case 'patrol':
-        this.vx=this.spd*this.patrolDir*0.6;this.walkCycle+=dt*5;
-        this.stateTimer-=dt;if(this.stateTimer<=0){this.state='idle';this.stateTimer=rand(0.5,2);}
-        if(d<this.sight)this.state='chase';
-        if(Math.abs(this.x-this.patrolBase)>200)this.patrolDir*=-1;break;
+        this.vx=this.spd*this.patrolDir*0.6;this.stateTimer-=dt;if(this.stateTimer<=0){this.state='idle';this.stateTimer=rand(0.5,2);}
+        if(d<this.sight)this.state='chase';if(Math.abs(this.x-this.patrolBase)>200)this.patrolDir*=-1;break;
       case 'chase':
         this.vx=clamp((player.x+flankOffset-this.x)*0.1,-1,1)*this.spd;
-        this.walkCycle+=dt*7;
         if(playerAttacking&&playerClose&&this.jumpCooldown<=0&&Math.random()<this.jumpChance){this.vy=-9;this.grounded=false;this.jumpCooldown=2.0;}
-        if(playerJumping&&d<this.atkRange*1.5&&this.jumpCooldown<=0&&Math.random()<0.1){this.vy=-8;this.grounded=false;this.jumpCooldown=1.5;}
-        if(d<this.atkRange&&this.atkTimer<=0&&this.grounded){this.state='attack';this.attacking=true;this.attackPhase=0;this.atkTimer=this.atkCd;}
+        if(d<this.atkRange&&this.atkTimer<=0&&this.grounded){this.state='attack';this.attacking=true;this.frameIdx=0;this.atkTimer=this.atkCd;}
         if(d>this.sight*1.2){this.state='idle';this.stateTimer=rand(0.5,1.5);}
         if(playerAttacking&&d<100&&Math.random()<this.dodge){this.state='dodge';this.stateTimer=0.35;this.vx=(this.facingRight?-1:1)*this.spd*3;}
         break;
       case 'attack':
-        this.vx*=0.7;this.walkCycle=lerp(this.walkCycle,0,0.5);
-        if(this.attacking){this.attackPhase+=dt*8;if(this.attackPhase>=3){this.attacking=false;this.attackPhase=0;}}
-        if(!this.attacking&&this.attackPhase===0){this.state='chase';}break;
-      case 'dodge':
-        this.stateTimer-=dt;this.vx*=0.95;this.walkCycle+=dt*8;
-        if(this.stateTimer<=0){this.state='chase';}break;
-      case 'hitstun':this.walkCycle=0;break;
+        this.vx*=0.7;this.frameIdx+=dt*this.frameSpeed;if(this.frameIdx>=6){this.attacking=false;this.frameIdx=0;this.state='chase';this.doAttack(player);}break;
+      case 'dodge':this.stateTimer-=dt;this.vx*=0.95;if(this.stateTimer<=0)this.state='chase';break;
+      case 'hitstun':break;
     }
     if(!this.grounded){this.vy+=25*dt;}
     this.x+=this.vx*60*dt;this.y+=this.vy*60*dt;
-    if(this.y+this.height/2>=this.groundY){this.y=this.groundY-this.height/2;this.vy=0;this.grounded=true;}else this.grounded=false;
-    if(this.attacking&&this.attackPhase>1.2&&this.attackPhase<1.5){this.doAttack(player);}
+    if(this.y+this.h/2>=this.groundY){this.y=this.groundY-this.h/2;this.vy=0;this.grounded=true;}else this.grounded=false;
+    // 更新帧
+    if(this.state==='patrol'||this.state==='chase'){this.frameIdx+=dt*this.frameSpeed;if(this.frameIdx>=8)this.frameIdx-=8;}
+    else if(this.state==='idle'){this.frameIdx+=dt*4;if(this.frameIdx>=8)this.frameIdx-=8;}
+    else if(this.state==='dodge'){this.frameIdx+=dt*12;if(this.frameIdx>=8)this.frameIdx-=8;}
   }
-  doAttack(player){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.atkRange+25){player.takeDamage(this.atk);}}
+  
+  doAttack(player){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.atkRange+25)player.takeDamage(this.atk);}
   takeDamage(dmg,knockback){this.hp-=dmg;this.hitFlash=0.1;this.hitStunTimer=0.15;this.vx=knockback||0;if(this.hp<=0){this.die();return true;}return false;}
   die(){this.dead=true;this.state='dead';this.deathTimer=0;}
+  
   draw(ctx,camX){
     if(this.fullyRemoved)return;
-    const sx=this.x-camX,sy=this.y;
-    ctx.save();ctx.translate(sx,sy);
-    if(this.dead){ctx.globalAlpha=Math.max(0,1-this.deathTimer*2.5);ctx.rotate(this.deathTimer*4);}
-    if(!this.facingRight)ctx.scale(-1,1);
+    let frames;
+    if(this.attacking)frames=ANIM.enemyAttack(this.w,this.h);
+    else if(this.state==='patrol'||this.state==='chase'||this.state==='dodge')frames=ANIM.enemyRun(this.w,this.h);
+    else frames=ANIM.enemyIdle(this.w,this.h);
+    const idx=Math.floor(this.frameIdx)%frames.length;
+    const frame=frames[idx];
+    const sx=this.x-camX-this.w/2,sy=this.y-this.h/2;
+    ctx.save();
+    if(this.dead){ctx.globalAlpha=Math.max(0,1-this.deathTimer*2.5);ctx.translate(this.x-camX,this.y);ctx.rotate(this.deathTimer*4);ctx.translate(-(this.x-camX),-this.y);}
+    if(!this.facingRight){ctx.translate(this.x-camX,0);ctx.scale(-1,1);ctx.translate(-(this.x-camX),0);}
     if(this.hitFlash>0)ctx.globalAlpha=0.5;
-    this.drawStickman(ctx,0,0);
+    ctx.drawImage(frame,sx,sy,this.w,this.h);
     ctx.restore();
     if(!this.dead)this.drawHealthBar(ctx,camX);
   }
-  drawStickman(ctx,ox,oy){
-    const h=this.height,bodyLen=h*0.28;
-    const breathBob=this.state==='idle'?Math.sin(this.breathCycle)*1.5:0;
-    const by=oy+breathBob;
-    const leanAngle=(this.state==='patrol'||this.state==='chase')?0.15:0.03;
-    const hipY=by+bodyLen*0.7;
-    ctx.save();ctx.translate(ox,hipY);ctx.rotate(leanAngle);ctx.translate(-ox,-hipY);
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(ox,by-bodyLen*0.3);ctx.lineTo(ox,by+bodyLen*0.7);ctx.stroke();
-    ctx.fillStyle=this.headColor;ctx.beginPath();ctx.arc(ox,by-bodyLen*0.3-9,10,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ox-3,by-bodyLen*0.3-10,2,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(ox+3,by-bodyLen*0.3-10,2,0,Math.PI*2);ctx.fill();
-    ctx.restore();
-    const upperLen=bodyLen*0.8,lowerLen=bodyLen*0.7;
-    let lThigh=0.15,rThigh=0.15,lKnee=0.25,rKnee=0.25;
-    if(this.state==='patrol'||this.state==='chase'){
-      const swing=Math.sin(this.walkCycle)*0.55;
-      lThigh=0.15+swing;rThigh=0.15-swing;
-      lKnee=0.25+Math.abs(swing)*0.5;rKnee=0.25+Math.abs(swing)*0.5;
-    }else if(this.state==='attack'){lThigh=0.22;rThigh=0.1;lKnee=0.1;rKnee=0.1;}
-    else if(this.state==='dodge'){lThigh=0.3;rThigh=0.05;lKnee=0.4;rKnee=0.1;}
-    else if(!this.grounded){lThigh=-0.1;rThigh=0.3;lKnee=0.5;rKnee=0.3;}
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
-    const lKX=ox+Math.sin(lThigh)*upperLen,lKY=hipY+Math.cos(lThigh)*upperLen;
-    const lFX=lKX+Math.sin(lThigh+lKnee)*lowerLen,lFY=lKY+Math.cos(lThigh+lKnee)*lowerLen;
-    ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(lKX,lKY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(lKX,lKY);ctx.lineTo(lFX,lFY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKX,lKY,3.5,0,Math.PI*2);ctx.fill();
-    const rKX=ox-Math.sin(rThigh)*upperLen,rKY=hipY+Math.cos(rThigh)*upperLen;
-    const rFX=rKX-Math.sin(rThigh+rKnee)*lowerLen,rFY=rKY+Math.cos(rThigh+rKnee)*lowerLen;
-    ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(rKX,rKY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(rKX,rKY);ctx.lineTo(rFX,rFY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKX,rKY,3.5,0,Math.PI*2);ctx.fill();
-    const shY=by-bodyLen*0.1;
-    const aUp=bodyLen*0.5,aFore=bodyLen*0.5;
-    let fUp=0.35,fEl=0.3,bUp=0.35,bEl=0.3;
-    if(this.state==='patrol'||this.state==='chase'){
-      const s=Math.sin(this.walkCycle)*0.35;
-      fUp=0.35+s;bUp=0.35-s;fEl=0.2+Math.abs(s)*0.5;bEl=0.2+Math.abs(s)*0.5;
-    }else if(this.state==='attack'){
-      if(this.attackPhase<1){fUp=0.6;bUp=-0.4;fEl=0.5;bEl=0.15;}
-      else if(this.attackPhase<2){fUp=1.5;bUp=-0.15;fEl=0.15;bEl=0.08;}
-    }
-    const fEX=ox+Math.cos(Math.PI*fUp)*aUp,fEY=shY-Math.sin(Math.PI*fUp)*aUp;
-    const fHX=fEX+Math.cos(Math.PI*(fUp-fEl))*aFore,fHY=fEY-Math.sin(Math.PI*(fUp-fEl))*aFore;
-    ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(fEX,fEY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(fEX,fEY);ctx.lineTo(fHX,fHY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fEX,fEY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fHX,fHY,4,0,Math.PI*2);ctx.fill();
-    const bEX=ox-Math.cos(Math.PI*bUp)*aUp,bEY=shY-Math.sin(Math.PI*bUp)*aUp;
-    const bHX=bEX-Math.cos(Math.PI*(bUp-bEl))*aFore,bHY=bEY-Math.sin(Math.PI*(bUp-bEl))*aFore;
-    ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(bEX,bEY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(bEX,bEY);ctx.lineTo(bHX,bHY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bEX,bEY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHX,bHY,4,0,Math.PI*2);ctx.fill();
-    if(this.state==='attack'&&this.attackPhase>0.5){
-      ctx.strokeStyle='#ff6644';ctx.lineWidth=4;
-      ctx.beginPath();ctx.moveTo(fHX,fHY);ctx.lineTo(ox+Math.cos(Math.PI*(fUp-fEl))*aFore*2.2,shY-Math.sin(Math.PI*(fUp-fEl))*aFore*2.2);ctx.stroke();
-    }
-  }
+  
   drawHealthBar(ctx,camX){
-    const sx=this.x-camX,sy=this.y-this.height/2-20;const bw=40,bh=5;
+    const sx=this.x-camX,sy=this.y-this.h/2-18;const bw=40,bh=5;
     ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy,bw,bh);
     ctx.fillStyle='#ff3333';ctx.fillRect(sx-bw/2,sy,bw*(this.hp/this.maxHp),bh);
-    ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(Math.ceil(this.hp)+'/'+this.maxHp,sx,sy-2);ctx.textAlign='start';
   }
 }
 
-// ==================== BOSS类（技能系统） ====================
+// ==================== BOSS ====================
 class Boss extends Enemy{
   constructor(type,x,y,groundY,cfgOverride,chapterId){
     super('sword',x,y,groundY,0,chapterId);
     const bcfg=cfgOverride||CFG.BOSS_CFG;
     const scale=getChapterScale(chapterId||1);
+    this.w=50;this.h=100;
     this.maxHp=Math.floor(bcfg.hp*scale);this.hp=this.maxHp;
     this.armor=Math.floor(bcfg.armor*scale);this.armorMax=this.armor;
     this.atk=Math.floor(bcfg.atk*scale);this.spd=bcfg.spd;
     this.atkRange=bcfg.atkRange;this.sight=bcfg.sight;this.atkCd=bcfg.atkCd;
-    this.stunDuration=bcfg.stunDuration;this.width=50;this.height=100;
-    this.stunned=false;this.stunTimer=0;this.name=bcfg.bossName||'BOSS';this.armorHitFlash=0;
-    this.goldReward=bcfg.gold||80;this.headColor='#111';
-    this.finalBoss=bcfg.finalBoss||false;
-    // BOSS技能系统
+    this.stunDuration=bcfg.stunDuration;this.name=bcfg.bossName||'BOSS';this.armorHitFlash=0;
+    this.goldReward=bcfg.gold||80;this.stunned=false;this.stunTimer=0;
     this.skillCooldown=CFG.BOSS_SKILLS.cooldown;this.skillTimer=rand(3,6);
-    this.skilling=false;this.skillPhase=0;this.skillType='';this.skillWarning=0;
+    this.skilling=false;this.skillType='';this.skillWarning=0;
     this.skillTypes=['groundSlam','charge','projectile'];
-    this.skillChargeDir=0;
+    this.skillChargeDir=0;this.finalBoss=bcfg.finalBoss||false;
+    this.frameSpeed=4;
   }
-  update(dt,player,playerAttacking,allEnemies){
+  
+  update(dt,player,playerAttacking){
     if(this.dead){this.deathTimer+=dt;if(this.deathTimer>0.6)this.fullyRemoved=true;return;}
     this.animTimer+=dt;this.atkTimer=Math.max(0,this.atkTimer-dt);
     this.hitFlash=Math.max(0,this.hitFlash-dt);this.armorHitFlash=Math.max(0,this.armorHitFlash-dt);
     if(this.stunned){this.stunTimer-=dt;if(this.stunTimer<=0){this.stunned=false;this.armor=this.armorMax;this.skillTimer=rand(3,6);}return;}
     const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
     this.facingRight=player.x>this.x;
-    // BOSS技能AI
     if(!this.skilling){
       this.skillTimer-=dt;
-      if(this.skillTimer<=0&&d<this.sight&&!this.attacking){
-        this.startSkill(player);
-      }
+      if(this.skillTimer<=0&&d<this.sight&&!this.attacking){this.startSkill(player);}
     }
-    if(this.skilling){
-      this.skillPhase+=dt*5;
-      this.executeSkill(dt,player);
-      return;
-    }
-    this.vx=(this.facingRight?1:-1)*this.spd;this.walkCycle+=dt*4;
-    if(d<this.atkRange&&this.atkTimer<=0&&!this.skilling){this.attacking=true;this.attackPhase=0;this.atkTimer=this.atkCd;}
-    this.x+=this.vx*60*dt;this.y=this.groundY-this.height/2;
-    if(this.attacking){this.attackPhase+=dt*6;if(this.attackPhase>=3){this.attacking=false;this.attackPhase=0;}}
-    if(this.attacking&&this.attackPhase>1.0&&this.attackPhase<1.4){this.doAttack(player);}
+    if(this.skilling){this.executeSkill(dt,player);return;}
+    this.vx=(this.facingRight?1:-1)*this.spd;
+    if(d<this.atkRange&&this.atkTimer<=0){this.attacking=true;this.frameIdx=0;this.atkTimer=this.atkCd;}
+    this.x+=this.vx*60*dt;this.y=this.groundY-this.h/2;
+    if(this.attacking){this.frameIdx+=dt*6;if(this.frameIdx>=6){this.attacking=false;this.frameIdx=0;this.doAttack(player);}}
+    if(this.state!=='patrol'&&this.state!=='chase')this.state='chase';
+    this.frameIdx+=dt*this.frameSpeed;if(this.frameIdx>=8)this.frameIdx-=8;
   }
-  startSkill(player){
-    this.skilling=true;this.skillPhase=0;this.skillWarning=0.8;
-    const idx=this.chapterId>=4?randInt(0,2):(this.chapterId>=2?randInt(0,1):0);
-    this.skillType=this.skillTypes[idx];
-    this.skillChargeDir=this.facingRight?1:-1;
-    this.vx=0;
-  }
+  
+  startSkill(player){this.skilling=true;this.frameIdx=0;this.skillWarning=0.8;const idx=this.chapterId>=4?randInt(0,2):(this.chapterId>=2?randInt(0,1):0);this.skillType=this.skillTypes[idx];this.skillChargeDir=this.facingRight?1:-1;this.vx=0;}
+  
   executeSkill(dt,player){
-    this.walkCycle=0;
-    if(this.skillWarning>0){
-      this.skillWarning-=dt;
-      return;
-    }
+    if(this.skillWarning>0){this.skillWarning-=dt;return;}
+    this.frameIdx+=dt*this.frameSpeed;
     const skillCfg=CFG.BOSS_SKILLS[this.skillType];
-    if(this.skillType==='groundSlam'){
-      if(this.skillPhase<0.8){this.y=this.groundY-this.height/2-20;}
-      else if(this.skillPhase<1.2){
-        this.y=this.groundY-this.height/2;
-        if(this.skillPhase>=1.0&&this.skillPhase<1.1){
-          const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
-          if(d<skillCfg.range){player.takeDamage(skillCfg.dmg);}
-        }
-      }
-      if(this.skillPhase>=1.5){this.endSkill();}
-    }else if(this.skillType==='charge'){
-      this.vx=this.skillChargeDir*this.spd*3;
-      this.x+=this.vx*60*dt;
-      if(this.skillPhase>=0.8&&this.skillPhase<1.3){
-        const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
-        if(d<this.atkRange+30){player.takeDamage(skillCfg.dmg);}
-      }
-      if(this.skillPhase>=1.5){this.endSkill();}
-    }else if(this.skillType==='projectile'){
-      if(this.skillPhase>=0.6&&this.skillPhase<0.7){
-        const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});
-        if(d<skillCfg.range){player.takeDamage(skillCfg.dmg);}
-      }
-      if(this.skillPhase>=1.2){this.endSkill();}
-    }
-    this.y=this.groundY-this.height/2;
+    if(this.skillType==='groundSlam'){if(this.frameIdx>=3&&this.frameIdx<4){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<skillCfg.range)player.takeDamage(skillCfg.dmg);}if(this.frameIdx>=8)this.endSkill();}
+    else if(this.skillType==='charge'){this.vx=this.skillChargeDir*this.spd*3;this.x+=this.vx*60*dt;if(this.frameIdx>=3&&this.frameIdx<5){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.atkRange+30)player.takeDamage(skillCfg.dmg);}if(this.frameIdx>=8)this.endSkill();}
+    else if(this.skillType==='projectile'){if(this.frameIdx>=3&&this.frameIdx<4){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<skillCfg.range)player.takeDamage(skillCfg.dmg);}if(this.frameIdx>=6)this.endSkill();}
   }
-  endSkill(){
-    this.skilling=false;this.skillPhase=0;this.skillType='';
-    this.skillTimer=CFG.BOSS_SKILLS.cooldown+rand(0,3);
-  }
-  doAttack(player){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.atkRange+35){player.takeDamage(this.atk);}}
+  
+  endSkill(){this.skilling=false;this.frameIdx=0;this.skillType='';this.skillTimer=CFG.BOSS_SKILLS.cooldown+rand(0,3);}
+  doAttack(player){const d=dist({x:this.x,y:this.y},{x:player.x,y:player.y});if(d<this.atkRange+35)player.takeDamage(this.atk);}
+  
   takeDamage(dmg,knockback){
     if(this.stunned){this.hp-=dmg;this.hitFlash=0.1;if(this.hp<=0){this.die();return true;}return false;}
     if(this.armor>0){this.armor-=dmg;this.armorHitFlash=0.08;if(this.armor<=0){this.armor=0;this.stunned=true;this.stunTimer=this.stunDuration;}return false;}
     this.hp-=dmg;this.hitFlash=0.1;if(this.hp<=0){this.die();return true;}return false;
   }
+  
   draw(ctx,camX){
     if(this.fullyRemoved)return;
-    const sx=this.x-camX,sy=this.y;
-    ctx.save();ctx.translate(sx,sy);
-    if(this.dead){ctx.globalAlpha=Math.max(0,1-this.deathTimer*2.5);ctx.rotate(this.deathTimer*4);}
-    if(!this.facingRight)ctx.scale(-1,1);
-    if(this.hitFlash>0&&!this.stunned)ctx.globalAlpha=0.5;
+    let frames;
+    if(this.skilling)frames=ANIM.bossSkill(this.w,this.h);
+    else if(this.attacking)frames=ANIM.bossAttack(this.w,this.h);
+    else frames=ANIM.bossRun(this.w,this.h);
+    const idx=Math.floor(this.frameIdx)%frames.length;
+    const frame=frames[idx];
+    const sx=this.x-camX-this.w/2,sy=this.y-this.h/2;
+    ctx.save();
+    if(this.dead){ctx.globalAlpha=Math.max(0,1-this.deathTimer*2.5);ctx.translate(this.x-camX,this.y);ctx.rotate(this.deathTimer*4);ctx.translate(-(this.x-camX),-this.y);}
+    if(!this.facingRight){ctx.translate(this.x-camX,0);ctx.scale(-1,1);ctx.translate(-(this.x-camX),0);}
     if(this.stunned)ctx.globalAlpha=0.4+Math.sin(this.animTimer*10)*0.3;
-    this.drawBossStickman(ctx,0,0);
+    else if(this.hitFlash>0)ctx.globalAlpha=0.5;
+    ctx.drawImage(frame,sx,sy,this.w,this.h);
     ctx.restore();
-    if(!this.dead)this.drawBossBars(ctx,camX);
-    // 技能警告特效
-    if(this.skilling&&this.skillWarning>0){
-      this.drawSkillWarning(ctx,camX);
-    }
-    // 技能特效
-    if(this.skilling&&this.skillWarning<=0){
-      this.drawSkillEffect(ctx,camX);
-    }
+    if(!this.dead)this.drawBars(ctx,camX);
+    if(this.skilling&&this.skillWarning>0)this.drawSkillWarning(ctx,camX);
+    if(this.skilling&&this.skillWarning<=0)this.drawSkillEffect(ctx,camX);
   }
+  
   drawSkillWarning(ctx,camX){
-    const sx=this.x-camX,sy=this.y-this.height/2-30;
-    const alpha=0.5+Math.sin(this.animTimer*12)*0.3;
-    ctx.fillStyle='rgba(255,80,80,'+alpha+')';
-    ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+    const sx=this.x-camX;const alpha=0.5+Math.sin(this.animTimer*12)*0.3;
+    ctx.fillStyle='rgba(255,80,80,'+alpha+')';ctx.font='bold 16px sans-serif';ctx.textAlign='center';
     const names={groundSlam:'地震踩踏!',charge:'冲锋撞击!',projectile:'能量弹!'};
-    ctx.fillText('⚠ '+names[this.skillType]+' ⚠',sx,sy);
-    // 范围指示器
+    ctx.fillText('⚠ '+names[this.skillType]+' ⚠',sx,this.y-this.h/2-30);
     const skillCfg=CFG.BOSS_SKILLS[this.skillType];
-    ctx.strokeStyle='rgba(255,80,80,'+alpha+')';ctx.lineWidth=2;
-    ctx.setLineDash([5,5]);
-    ctx.beginPath();ctx.arc(this.x-camX,this.y,skillCfg.range,0,Math.PI*2);ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(255,80,80,'+alpha+')';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+    ctx.beginPath();ctx.arc(sx,this.y,skillCfg.range,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
     ctx.textAlign='start';
   }
+  
   drawSkillEffect(ctx,camX){
     const sx=this.x-camX,sy=this.y;
     const skillCfg=CFG.BOSS_SKILLS[this.skillType];
-    if(this.skillType==='groundSlam'&&this.skillPhase>=0.9&&this.skillPhase<1.2){
-      ctx.fillStyle='rgba(255,136,68,0.4)';
-      ctx.beginPath();ctx.ellipse(sx,sy+this.height/2,skillCfg.range*0.8,15,0,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='rgba(255,136,68,0.8)';ctx.lineWidth=3;
-      ctx.beginPath();ctx.ellipse(sx,sy+this.height/2,skillCfg.range*0.8,15,0,0,Math.PI*2);ctx.stroke();
-    }else if(this.skillType==='charge'&&this.skillPhase>=0.5&&this.skillPhase<1.5){
-      ctx.fillStyle='rgba(255,68,68,0.3)';
-      ctx.beginPath();ctx.arc(sx,sy,35,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='rgba(255,68,68,0.7)';ctx.lineWidth=3;
-      ctx.beginPath();ctx.arc(sx,sy,35,0,Math.PI*2);ctx.stroke();
-    }else if(this.skillType==='projectile'&&this.skillPhase>=0.3&&this.skillPhase<0.8){
-      const px=this.x+this.skillChargeDir*30;
-      ctx.fillStyle='rgba(255,68,255,0.4)';
-      ctx.beginPath();ctx.arc(px-camX,sy-20,15,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='rgba(255,68,255,0.8)';ctx.lineWidth=3;
-      ctx.beginPath();ctx.arc(px-camX,sy-20,15,0,Math.PI*2);ctx.stroke();
+    if(this.skillType==='groundSlam'&&this.frameIdx>=2&&this.frameIdx<5){
+      ctx.fillStyle='rgba(255,136,68,0.4)';ctx.beginPath();ctx.ellipse(sx,sy+this.h/2,skillCfg.range*0.8,15,0,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(255,136,68,0.8)';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(sx,sy+this.h/2,skillCfg.range*0.8,15,0,0,Math.PI*2);ctx.stroke();
+    }else if(this.skillType==='charge'&&this.frameIdx>=2&&this.frameIdx<6){
+      ctx.fillStyle='rgba(255,68,68,0.3)';ctx.beginPath();ctx.arc(sx,sy,35,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(255,68,68,0.7)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(sx,sy,35,0,Math.PI*2);ctx.stroke();
+    }else if(this.skillType==='projectile'&&this.frameIdx>=2&&this.frameIdx<5){
+      ctx.fillStyle='rgba(255,68,255,0.4)';ctx.beginPath();ctx.arc(sx,sy-20,15,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(255,68,255,0.8)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(sx,sy-20,15,0,Math.PI*2);ctx.stroke();
     }
   }
-  drawBossStickman(ctx,ox,oy){
-    const h=this.height,bodyLen=h*0.28;
-    const leanAngle=this.stunned?0:0.12;
-    const hipY=oy+bodyLen*0.7;
-    ctx.save();ctx.translate(ox,hipY);ctx.rotate(leanAngle);ctx.translate(-ox,-hipY);
-    ctx.strokeStyle='#111';ctx.lineWidth=6;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.3);ctx.lineTo(ox,oy+bodyLen*0.7);ctx.stroke();
-    if(!this.dead&&this.armorMax>0){
-      ctx.strokeStyle=this.armorHitFlash>0?'#88aaff':'#555';ctx.lineWidth=3;
-      ctx.strokeRect(ox-15,oy-bodyLen*0.2-2,30,bodyLen*1.1);
-    }
-    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(ox,oy-bodyLen*0.3-14,16,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#f00';ctx.beginPath();ctx.arc(ox-5,oy-bodyLen*0.3-16,4,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(ox+5,oy-bodyLen*0.3-16,4,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#111';ctx.lineWidth=4;
-    ctx.beginPath();ctx.moveTo(ox-10,oy-bodyLen*0.3-26);ctx.lineTo(ox-18,oy-bodyLen*0.3-38);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(ox+10,oy-bodyLen*0.3-26);ctx.lineTo(ox+18,oy-bodyLen*0.3-38);ctx.stroke();
-    ctx.restore();
-    const upL=bodyLen*0.9,loL=bodyLen*0.8;
-    let lT=0.15,rT=0.15,lK=0.25,rK=0.25;
-    if(!this.stunned&&!this.skilling){
-      const sw=Math.sin(this.walkCycle)*0.5;
-      lT=0.15+sw;rT=0.15-sw;lK=0.25+Math.abs(sw)*0.45;rK=0.25+Math.abs(sw)*0.45;
-    }
-    ctx.strokeStyle='#111';ctx.lineWidth=6;ctx.lineCap='round';
-    const lKX=ox+Math.sin(lT)*upL,lKY=hipY+Math.cos(lT)*upL;
-    ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(lKX,lKY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(lKX,lKY);ctx.lineTo(lKX+Math.sin(lT+lK)*loL,lKY+Math.cos(lT+lK)*loL);ctx.stroke();
-    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(lKX,lKY,4,0,Math.PI*2);ctx.fill();
-    const rKX=ox-Math.sin(rT)*upL,rKY=hipY+Math.cos(rT)*upL;
-    ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(rKX,rKY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(rKX,rKY);ctx.lineTo(rKX-Math.sin(rT+rK)*loL,rKY+Math.cos(rT+rK)*loL);ctx.stroke();
-    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(rKX,rKY,4,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#111';ctx.lineWidth=5;
-    const shY=oy-bodyLen*0.1;const aLen=bodyLen*0.95;
-    let armA=0.35;
-    if(this.skilling&&this.skillWarning<=0){
-      // 技能释放时手臂动作
-      if(this.skillType==='groundSlam'){
-        if(this.skillPhase<0.8)armA=-0.5;else armA=1.8;
-      }else if(this.skillType==='charge'){armA=0.1;}
-      else if(this.skillType==='projectile'){armA=0.2;}
-      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen,shY-Math.sin(Math.PI*armA)*aLen);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox-Math.cos(Math.PI*0.35)*aLen,shY-Math.sin(Math.PI*0.35)*aLen);ctx.stroke();
-    }else if(!this.stunned){
-      const armSwing=Math.sin(this.walkCycle)*0.3;
-      const armA2=0.35-armSwing;
-      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen,shY-Math.sin(Math.PI*armA)*aLen);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox-Math.cos(Math.PI*armA2)*aLen,shY-Math.sin(Math.PI*armA2)*aLen);ctx.stroke();
-    }else{
-      if(this.attacking){if(this.attackPhase<1)armA=0.6;else if(this.attackPhase<2)armA=1.7;else armA=0.35;}
-      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen,shY-Math.sin(Math.PI*armA)*aLen);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox-Math.cos(Math.PI*0.35)*aLen,shY-Math.sin(Math.PI*0.35)*aLen);ctx.stroke();
-    }
-    if(this.attacking&&this.attackPhase>0.8){
-      ctx.strokeStyle='#ff4444';ctx.lineWidth=8;
-      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen*2,shY-Math.sin(Math.PI*armA)*aLen*2);ctx.stroke();
-    }
-  }
-  drawBossBars(ctx,camX){
-    const sx=this.x-camX,sy=this.y-this.height/2-25;const bw=60,bh=6;
-    if(this.armorMax>0){ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy,bw,bh);ctx.fillStyle='#4488ff';ctx.fillRect(sx-bw/2,sy,bw*(this.armor/this.armorMax),bh);ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText('护甲',sx,sy-2);}
+  
+  drawBars(ctx,camX){
+    const sx=this.x-camX,sy=this.y-this.h/2-25;const bw=60,bh=6;
+    if(this.armorMax>0){ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy,bw,bh);ctx.fillStyle='#4488ff';ctx.fillRect(sx-bw/2,sy,bw*(this.armor/this.armorMax),bh);}
     const sy2=sy-10;ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-bw/2,sy2,bw,bh);ctx.fillStyle='#ff3333';ctx.fillRect(sx-bw/2,sy2,bw*(this.hp/this.maxHp),bh);
-    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(this.name+' '+Math.ceil(this.hp)+'/'+this.maxHp,sx,sy2-2);
+    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(this.name+':'+Math.ceil(this.hp),sx,sy2-2);
     if(this.stunned){ctx.fillStyle='#ffcc00';ctx.font='bold 14px sans-serif';ctx.fillText('眩晕 '+Math.ceil(this.stunTimer)+'s',sx,sy-40);}ctx.textAlign='start';
   }
 }
@@ -966,16 +788,15 @@ class Boss extends Enemy{
 class Joystick{
   constructor(){this.baseX=0;this.baseY=0;this.thumbX=0;this.thumbY=0;this.active=false;this.touchId=null;this.dx=0;this.dy=0;this.jumpPressed=false;}
   setBase(x,y){this.baseX=x;this.baseY=y;this.thumbX=x;this.thumbY=y;}
-  handleDown(tx,ty,touchId){const jd=dist({x:tx,y:ty},{x:this.baseX,y:this.baseY});if(jd<90){this.active=true;this.touchId=touchId;this.updateThumb(tx,ty);}return this.active;}
-  handleMove(tx,ty,touchId){if(this.active&&this.touchId===touchId){this.updateThumb(tx,ty);return true;}return false;}
-  handleUp(touchId){if(this.touchId===touchId){this.active=false;this.touchId=null;this.thumbX=this.baseX;this.thumbY=this.baseY;this.dx=0;this.dy=0;return true;}return false;}
-  updateThumb(tx,ty){let dx=tx-this.baseX,dy=ty-this.baseY;const d=Math.sqrt(dx*dx+dy*dy),maxR=65;if(d>maxR){dx=dx/d*maxR;dy=dy/d*maxR;}this.thumbX=this.baseX+dx;this.thumbY=this.baseY+dy;this.dx=dx/maxR;this.dy=dy/maxR;}
+  handleDown(x,y,id){const jd=dist({x:x,y:y},{x:this.baseX,y:this.baseY});if(jd<90){this.active=true;this.touchId=id;this.updateThumb(x,y);}return this.active;}
+  handleMove(x,y,id){if(this.active&&this.touchId===id){this.updateThumb(x,y);return true;}return false;}
+  handleUp(id){if(this.touchId===id){this.active=false;this.touchId=null;this.thumbX=this.baseX;this.thumbY=this.baseY;this.dx=0;this.dy=0;return true;}return false;}
+  updateThumb(x,y){let dx=x-this.baseX,dy=y-this.baseY;const d=Math.sqrt(dx*dx+dy*dy),maxR=65;if(d>maxR){dx=dx/d*maxR;dy=dy/d*maxR;}this.thumbX=this.baseX+dx;this.thumbY=this.baseY+dy;this.dx=dx/maxR;this.dy=dy/maxR;}
   draw(ctx){
     ctx.fillStyle='rgba(255,255,255,0.08)';ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(this.baseX,this.baseY,65,0,Math.PI*2);ctx.fill();ctx.stroke();
     ctx.fillStyle='rgba(255,255,255,0.04)';ctx.beginPath();ctx.arc(this.baseX,this.baseY,45,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='rgba(255,255,255,0.25)';ctx.beginPath();ctx.arc(this.thumbX,this.thumbY,24,0,Math.PI*2);ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.beginPath();ctx.arc(this.thumbX,this.thumbY,24,0,Math.PI*2);ctx.stroke();
-    ctx.strokeStyle='rgba(255,255,255,0.1)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(this.baseX-10,this.baseY);ctx.lineTo(this.baseX+10,this.baseY);ctx.stroke();ctx.beginPath();ctx.moveTo(this.baseX,this.baseY-10);ctx.lineTo(this.baseX,this.baseY+10);ctx.stroke();
   }
 }
 
@@ -993,22 +814,16 @@ class Game{
     this.player.weapon=DB.data.weapon;
     this.enemies=[];this.boss=null;this.particles=[];this.floatingTexts=[];this.drops=[];
     this.state='playing';this.victoryScene=false;this.gameOverCause='';this.sceneClear=false;
-    this.paused=false;
-    this.time=0;this.lastTime=0;this.shakeTimer=0;this.shakeIntensity=0;
-    this.bgRenderer=new BackgroundRenderer(this.sceneCfg);
-    this.activeTouches={};this.touchButtonMap={};
-    this.transitionTimer=0;this.killedGold=0;this.hasEnemies=false;
-    this.joystickTouchId=null;this.keyStates={};
-    this.pauseBtnArea={x:25,y:25,w:36,h:36};
-    // 胜利延迟返回
-    this.victoryTimer=0;this.victoryAutoReturn=false;
-    // 事件监听器引用（用于清理）
-    this._boundTouchStart=null;this._boundTouchMove=null;this._boundTouchEnd=null;
-    this._boundTouchCancel=null;this._boundMouseDown=null;this._boundMouseMove=null;this._boundMouseUp=null;
-    this._boundKeyDown=null;this._boundKeyUp=null;this._boundResize=null;
+    this.paused=false;this.time=0;this.lastTime=0;this.shakeTimer=0;this.shakeIntensity=0;
+    this.bg=new Background(this.sceneCfg);
+    this.activeTouches={};this.touchButtonMap={};this.transitionTimer=0;this.killedGold=0;this.hasEnemies=false;
+    this.joystickTouchId=null;this.keyStates={};this.victoryTimer=0;this.victoryAutoReturn=false;
+    this.pauseBtn={x:25,y:25,w:36,h:36};
+    this._bound={};
     this.initScene();this.setupInput();this.running=true;
     this.lastTime=performance.now();requestAnimationFrame(t=>this.gameLoop(t));
   }
+  
   resize(){
     const scrEl=document.getElementById('gameScreen');const scrRect=scrEl?scrEl.getBoundingClientRect():{width:window.innerWidth,height:window.innerHeight};
     const scrW=scrRect.width||window.innerWidth,scrH=scrRect.height||window.innerHeight;
@@ -1020,13 +835,13 @@ class Game{
     this.scale=ratio;this.joystick.setBase(90,this.gameH*0.72);
     this.btnAreas={skill:{x:this.gameW*0.85,y:this.gameH*0.55,r:this.gameW*0.08},jump:{x:this.gameW*0.85,y:this.gameH*0.68,r:this.gameW*0.08},attack:{x:this.gameW*0.85,y:this.gameH*0.82,r:this.gameW*0.11}};
   }
+  
   initScene(){
     this.enemies=[];this.boss=null;this.sceneClear=false;this.transitionTimer=0;this.killedGold=0;this.drops=[];
     this.victoryTimer=0;this.victoryAutoReturn=false;
-    const cfg=this.sceneCfg;this.bgRenderer=new BackgroundRenderer(cfg);
-    const spawnStart=this.worldW*0.15;
-    const spawnEnd=this.worldW*0.55;
-    if(cfg.boss){
+    this.bg=new Background(this.sceneCfg);
+    const spawnStart=this.worldW*0.15,spawnEnd=this.worldW*0.55;
+    if(this.sceneCfg.boss){
       const extraScale=this.chapterId>=5?1.5:1;
       this.boss=new Boss('sword',spawnStart+rand(100,300),this.groundY-50,this.groundY,{
         hp:Math.floor(CFG.BOSS_CFG.hp*getChapterScale(this.chapterId)*extraScale),
@@ -1034,322 +849,173 @@ class Game{
         atk:Math.floor(CFG.BOSS_CFG.atk*getChapterScale(this.chapterId)),
         spd:CFG.BOSS_CFG.spd,atkRange:CFG.BOSS_CFG.atkRange,sight:CFG.BOSS_CFG.sight,
         atkCd:CFG.BOSS_CFG.atkCd,stunDuration:CFG.BOSS_CFG.stunDuration,
-        gold:80+this.chapterId*20,xp:CFG.BOSS_CFG.xp,
-        bossName:cfg.bossName||'BOSS',finalBoss:cfg.finalBoss||false
+        gold:80+this.chapterId*20,bossName:this.sceneCfg.bossName||'BOSS',finalBoss:this.sceneCfg.finalBoss||false
       },this.chapterId);
     }
     let idx=0;this.hasEnemies=false;
-    for(const group of cfg.enemies){
+    for(const group of this.sceneCfg.enemies){
       for(let i=0;i<group.count;i++){
         const ex=spawnStart+rand(i*100,i*100+120)+(spawnEnd-spawnStart)*rand(0,0.8);
         this.enemies.push(new Enemy(group.type,ex,this.groundY-35,this.groundY,idx++,this.chapterId));
         this.hasEnemies=true;
       }
     }
-    if(cfg.boss)this.hasEnemies=true;
+    if(this.sceneCfg.boss)this.hasEnemies=true;
     this.player.x=100;this.player.y=this.groundY-40;this.player.vx=0;this.player.vy=0;this.player.grounded=true;
     this.camX=0;this.player.weapon=DB.data.weapon;
   }
+  
   setupInput(){
-    this._boundTouchStart=this.onTouchStart.bind(this);
-    this._boundTouchMove=this.onTouchMove.bind(this);
-    this._boundTouchEnd=this.onTouchEnd.bind(this);
-    this._boundTouchCancel=this.onTouchEnd.bind(this);
-    this._boundMouseDown=this.onMouseDown.bind(this);
-    this._boundMouseMove=this.onMouseMove.bind(this);
-    this._boundMouseUp=this.onMouseUp.bind(this);
-    this._boundKeyDown=this.onKeyDown.bind(this);
-    this._boundKeyUp=this.onKeyUp.bind(this);
-    this._boundResize=this.resize.bind(this);
-    this.canvas.addEventListener('touchstart',this._boundTouchStart,{passive:false});
-    this.canvas.addEventListener('touchmove',this._boundTouchMove,{passive:false});
-    this.canvas.addEventListener('touchend',this._boundTouchEnd,{passive:false});
-    this.canvas.addEventListener('touchcancel',this._boundTouchCancel,{passive:false});
-    this.canvas.addEventListener('mousedown',this._boundMouseDown);
-    window.addEventListener('mousemove',this._boundMouseMove);
-    window.addEventListener('mouseup',this._boundMouseUp);
-    window.addEventListener('keydown',this._boundKeyDown);
-    window.addEventListener('keyup',this._boundKeyUp);
-    window.addEventListener('resize',this._boundResize);
+    this._bound.ts=this.onTouchStart.bind(this);this._bound.tm=this.onTouchMove.bind(this);
+    this._bound.te=this.onTouchEnd.bind(this);this._bound.tc=this.onTouchEnd.bind(this);
+    this._bound.md=this.onMouseDown.bind(this);this._bound.mm=this.onMouseMove.bind(this);
+    this._bound.mu=this.onMouseUp.bind(this);this._bound.kd=this.onKeyDown.bind(this);
+    this._bound.ku=this.onKeyUp.bind(this);this._bound.rs=this.resize.bind(this);
+    this.canvas.addEventListener('touchstart',this._bound.ts,{passive:false});
+    this.canvas.addEventListener('touchmove',this._bound.tm,{passive:false});
+    this.canvas.addEventListener('touchend',this._bound.te,{passive:false});
+    this.canvas.addEventListener('touchcancel',this._bound.tc,{passive:false});
+    this.canvas.addEventListener('mousedown',this._bound.md);
+    window.addEventListener('mousemove',this._bound.mm);
+    window.addEventListener('mouseup',this._bound.mu);
+    window.addEventListener('keydown',this._bound.kd);
+    window.addEventListener('keyup',this._bound.ku);
+    window.addEventListener('resize',this._bound.rs);
   }
+  
   cleanupInput(){
-    if(this._boundTouchStart)this.canvas.removeEventListener('touchstart',this._boundTouchStart);
-    if(this._boundTouchMove)this.canvas.removeEventListener('touchmove',this._boundTouchMove);
-    if(this._boundTouchEnd)this.canvas.removeEventListener('touchend',this._boundTouchEnd);
-    if(this._boundTouchCancel)this.canvas.removeEventListener('touchcancel',this._boundTouchCancel);
-    if(this._boundMouseDown)this.canvas.removeEventListener('mousedown',this._boundMouseDown);
-    if(this._boundMouseMove)window.removeEventListener('mousemove',this._boundMouseMove);
-    if(this._boundMouseUp)window.removeEventListener('mouseup',this._boundMouseUp);
-    if(this._boundKeyDown)window.removeEventListener('keydown',this._boundKeyDown);
-    if(this._boundKeyUp)window.removeEventListener('keyup',this._boundKeyUp);
-    if(this._boundResize)window.removeEventListener('resize',this._boundResize);
+    const b=this._bound;const c=this.canvas;
+    if(b.ts)c.removeEventListener('touchstart',b.ts);if(b.tm)c.removeEventListener('touchmove',b.tm);
+    if(b.te)c.removeEventListener('touchend',b.te);if(b.tc)c.removeEventListener('touchcancel',b.tc);
+    if(b.md)c.removeEventListener('mousedown',b.md);
+    if(b.mm)window.removeEventListener('mousemove',b.mm);
+    if(b.mu)window.removeEventListener('mouseup',b.mu);
+    if(b.kd)window.removeEventListener('keydown',b.kd);
+    if(b.ku)window.removeEventListener('keyup',b.ku);
+    if(b.rs)window.removeEventListener('resize',b.rs);
   }
-  screenToGame(clientX,clientY){const rect=this.canvas.getBoundingClientRect();return{x:(clientX-rect.left)/this.scale,y:(clientY-rect.top)/this.scale};}
-  onTouchStart(e){
-    e.preventDefault();
-    for(const t of e.changedTouches){
-      const p=this.screenToGame(t.clientX,t.clientY);
-      this.activeTouches[t.identifier]=p;
-      if(this.state==='gameover'){this.handleClick(p.x,p.y);continue;}
-      if(this.state==='victory'){this.handleClick(p.x,p.y);continue;}
-      if(this.paused){this.handlePauseClick(p.x,p.y);continue;}
-      if(this.checkPauseBtn(p.x,p.y)){this.togglePause();continue;}
-      if(this.joystick.handleDown(p.x,p.y,t.identifier)){
-        this.joystickTouchId=t.identifier;
-      }else{
-        const btn=this.checkButton(p.x,p.y);
-        if(btn){this.touchButtonMap[t.identifier]=btn;this.handleButton(btn);}
-      }
-    }
-  }
-  onTouchMove(e){
-    e.preventDefault();
-    for(const t of e.changedTouches){
-      const p=this.screenToGame(t.clientX,t.clientY);
-      this.activeTouches[t.identifier]=p;
-      if(!this.joystick.handleMove(p.x,p.y,t.identifier)){
-        const btn=this.checkButton(p.x,p.y);
-        if(btn&&!this.touchButtonMap[t.identifier]){this.touchButtonMap[t.identifier]=btn;this.handleButton(btn);}
-      }
-    }
-  }
-  onTouchEnd(e){
-    for(const t of e.changedTouches){
-      this.joystick.handleUp(t.identifier);
-      if(this.touchButtonMap[t.identifier]){delete this.touchButtonMap[t.identifier];}
-      delete this.activeTouches[t.identifier];
-      if(this.joystickTouchId===t.identifier)this.joystickTouchId=null;
-    }
-  }
-  onMouseDown(e){
-    const p=this.screenToGame(e.clientX,e.clientY);
-    if(this.state==='gameover'||this.state==='victory'){this.handleClick(p.x,p.y);return;}
-    if(this.paused){this.handlePauseClick(p.x,p.y);return;}
-    if(this.checkPauseBtn(p.x,p.y)){this.togglePause();return;}
-    if(this.joystick.handleDown(p.x,p.y,'mouse')){this.joystickTouchId='mouse';return;}
-    const btn=this.checkButton(p.x,p.y);if(btn)this.handleButton(btn);
-  }
+  
+  screenToGame(cx,cy){const r=this.canvas.getBoundingClientRect();return{x:(cx-r.left)/this.scale,y:(cy-r.top)/this.scale};}
+  
+  onTouchStart(e){e.preventDefault();for(const t of e.changedTouches){const p=this.screenToGame(t.clientX,t.clientY);this.activeTouches[t.identifier]=p;if(this.state==='gameover'||this.state==='victory'){this.handleClick(p.x,p.y);continue;}if(this.paused){this.handlePauseClick(p.x,p.y);continue;}if(this.checkPauseBtn(p.x,p.y)){this.togglePause();continue;}if(this.joystick.handleDown(p.x,p.y,t.identifier)){this.joystickTouchId=t.identifier;}else{const btn=this.checkButton(p.x,p.y);if(btn){this.touchButtonMap[t.identifier]=btn;this.handleButton(btn);}}}}
+  
+  onTouchMove(e){e.preventDefault();for(const t of e.changedTouches){const p=this.screenToGame(t.clientX,t.clientY);this.activeTouches[t.identifier]=p;if(!this.joystick.handleMove(p.x,p.y,t.identifier)){const btn=this.checkButton(p.x,p.y);if(btn&&!this.touchButtonMap[t.identifier]){this.touchButtonMap[t.identifier]=btn;this.handleButton(btn);}}}}
+  
+  onTouchEnd(e){for(const t of e.changedTouches){this.joystick.handleUp(t.identifier);if(this.touchButtonMap[t.identifier])delete this.touchButtonMap[t.identifier];delete this.activeTouches[t.identifier];if(this.joystickTouchId===t.identifier)this.joystickTouchId=null;}}
+  
+  onMouseDown(e){const p=this.screenToGame(e.clientX,e.clientY);if(this.state==='gameover'||this.state==='victory'){this.handleClick(p.x,p.y);return;}if(this.paused){this.handlePauseClick(p.x,p.y);return;}if(this.checkPauseBtn(p.x,p.y)){this.togglePause();return;}if(this.joystick.handleDown(p.x,p.y,'mouse')){this.joystickTouchId='mouse';return;}const btn=this.checkButton(p.x,p.y);if(btn)this.handleButton(btn);}
+  
   onMouseMove(e){if(!e.buttons)return;const p=this.screenToGame(e.clientX,e.clientY);this.joystick.handleMove(p.x,p.y,'mouse');}
   onMouseUp(e){this.joystick.handleUp('mouse');this.joystickTouchId=null;}
-  onKeyDown(e){
-    if(e.key==='Escape'){this.togglePause();return;}
-    if(this.paused)return;
-    this.keyStates[e.key]=true;
-    switch(e.key){
-      case'ArrowLeft':case'a':this.joystick.dx=-1;break;
-      case'ArrowRight':case'd':this.joystick.dx=1;break;
-      case'ArrowUp':case'w':this.joystick.dy=-1;break;
-      case'ArrowDown':case's':this.joystick.dy=1;break;
-      case'j':case'J':this.handleButton('attack');break;
-      case'k':case'K':this.handleButton('jump');break;
-      case'l':case'L':this.handleButton('skill');break;
-    }
-  }
-  onKeyUp(e){
-    this.keyStates[e.key]=false;
-    switch(e.key){
-      case'ArrowLeft':case'a':if(!this.keyStates['ArrowRight']&&!this.keyStates['d'])this.joystick.dx=0;break;
-      case'ArrowRight':case'd':if(!this.keyStates['ArrowLeft']&&!this.keyStates['a'])this.joystick.dx=0;break;
-      case'ArrowUp':case'w':if(!this.keyStates['ArrowDown']&&!this.keyStates['s'])this.joystick.dy=0;break;
-      case'ArrowDown':case's':if(!this.keyStates['ArrowUp']&&!this.keyStates['w'])this.joystick.dy=0;break;
-    }
-  }
-  checkPauseBtn(gx,gy){return gx>=this.pauseBtnArea.x&&gx<=this.pauseBtnArea.x+this.pauseBtnArea.w&&gy>=this.pauseBtnArea.y&&gy<=this.pauseBtnArea.y+this.pauseBtnArea.h;}
+  
+  onKeyDown(e){if(e.key==='Escape'){this.togglePause();return;}if(this.paused)return;this.keyStates[e.key]=true;switch(e.key){case'ArrowLeft':case'a':this.joystick.dx=-1;break;case'ArrowRight':case'd':this.joystick.dx=1;break;case'ArrowUp':case'w':this.joystick.dy=-1;break;case'ArrowDown':case's':this.joystick.dy=1;break;case'j':case'J':this.handleButton('attack');break;case'k':case'K':this.handleButton('jump');break;case'l':case'L':this.handleButton('skill');break;}}
+  
+  onKeyUp(e){this.keyStates[e.key]=false;switch(e.key){case'ArrowLeft':case'a':if(!this.keyStates['ArrowRight']&&!this.keyStates['d'])this.joystick.dx=0;break;case'ArrowRight':case'd':if(!this.keyStates['ArrowLeft']&&!this.keyStates['a'])this.joystick.dx=0;break;case'ArrowUp':case'w':if(!this.keyStates['ArrowDown']&&!this.keyStates['s'])this.joystick.dy=0;break;case'ArrowDown':case's':if(!this.keyStates['ArrowUp']&&!this.keyStates['w'])this.joystick.dy=0;break;}}
+  
+  checkPauseBtn(gx,gy){return gx>=this.pauseBtn.x&&gx<=this.pauseBtn.x+this.pauseBtn.w&&gy>=this.pauseBtn.y&&gy<=this.pauseBtn.y+this.pauseBtn.h;}
   togglePause(){this.paused=!this.paused;}
-  handlePauseClick(gx,gy){
-    if(gx>this.gameW*0.25&&gx<this.gameW*0.75){
-      if(gy>this.gameH*0.4&&gy<this.gameH*0.52)this.paused=false;
-      if(gy>this.gameH*0.55&&gy<this.gameH*0.67)this.goToMenu();
-    }
-  }
+  handlePauseClick(gx,gy){if(gx>this.gameW*0.25&&gx<this.gameW*0.75){if(gy>this.gameH*0.4&&gy<this.gameH*0.52)this.paused=false;if(gy>this.gameH*0.55&&gy<this.gameH*0.67)this.goToMenu();}}
   checkButton(gx,gy){for(const k in this.btnAreas){const b=this.btnAreas[k];if(dist({x:gx,y:gy},{x:b.x,y:b.y})<b.r)return k;}return null;}
   handleButton(btn){if(this.state!=='playing'||this.paused)return;switch(btn){case'attack':this.playerAttack();break;case'jump':this.joystick.jumpPressed=true;break;case'skill':this.playerSkill();break;}}
-  playerAttack(){if(this.state!=='playing')return;const hit=this.player.attack();if(!hit)return;this.checkHit(hit);}
-  playerSkill(){if(this.state!=='playing')return;const hit=this.player.skill();if(!hit)return;this.checkHit(hit);this.shakeTimer=0.2;this.shakeIntensity=8;for(let i=0;i<30;i++)this.particles.push(new Particle(hit.x+hit.w/2,hit.y+hit.h/2,{vx:rand(-5,5),vy:rand(-4,2),color:'#ff6644',life:0.5,size:rand(3,8),gravity:1}));}
+  playerAttack(){if(this.state!=='playing')return;const hit=this.player.attack();if(!hit)return;this.checkHit(hit);this.shakeTimer=0.06;this.shakeIntensity=3;}
+  playerSkill(){if(this.state!=='playing')return;const hit=this.player.skill();if(!hit)return;this.checkHit(hit);this.shakeTimer=0.15;this.shakeIntensity=6;for(let i=0;i<20;i++)this.particles.push(new Particle(hit.x+hit.w/2,hit.y+hit.h/2,{vx:rand(-4,4),vy:rand(-3,1),color:'#ff6644',life:0.5,size:rand(3,7),gravity:1}));}
+  
   checkHit(hit){
     let hitAny=false;
-    for(const enemy of this.enemies){
-      if(enemy.dead)continue;
-      if(this.hitOverlap(hit,enemy)){
-        const killed=enemy.takeDamage(hit.damage,hit.knockback);
-        this.spawnHitParticles(enemy.x,enemy.y,hit.color);
-        if(killed){this.onEnemyKilled(enemy);}
-        hitAny=true;
-      }
-    }
-    if(this.boss&&!this.boss.dead){
-      if(this.hitOverlap(hit,this.boss)){
-        const killed=this.boss.takeDamage(hit.damage,hit.knockback);
-        this.spawnHitParticles(this.boss.x,this.boss.y,hit.color);
-        if(killed){this.onEnemyKilled(this.boss);}
-        hitAny=true;
-      }
-    }
-    if(hitAny&&hit.isSkill){this.shakeTimer=0.2;this.shakeIntensity=8;}
-    else if(hitAny){this.shakeTimer=0.08;this.shakeIntensity=4;}
+    for(const enemy of this.enemies){if(enemy.dead)continue;if(this.hitOverlap(hit,enemy)){const killed=enemy.takeDamage(hit.damage,hit.knockback);this.spawnHitParticles(enemy.x,enemy.y,hit.color);if(killed){this.onEnemyKilled(enemy);}hitAny=true;}}
+    if(this.boss&&!this.boss.dead){if(this.hitOverlap(hit,this.boss)){const killed=this.boss.takeDamage(hit.damage,hit.knockback);this.spawnHitParticles(this.boss.x,this.boss.y,hit.color);if(killed){this.onEnemyKilled(this.boss);}hitAny=true;}}
+    if(hitAny&&hit.isSkill){this.shakeTimer=0.15;this.shakeIntensity=8;}
+    else if(hitAny){this.shakeTimer=0.06;this.shakeIntensity=3;}
   }
-  onEnemyKilled(enemy){
-    this.spawnDeathParticles(enemy.x,enemy.y);
-    this.killedGold+=enemy.goldReward;
-    this.floatingTexts.push(new FloatingText(enemy.x,enemy.y-20,'+'+enemy.goldReward+'💰','#ffcc00'));
-    this.tryDropItem(enemy);
-  }
+  
+  onEnemyKilled(enemy){this.spawnDeathParticles(enemy.x,enemy.y);this.killedGold+=enemy.goldReward;this.floatingTexts.push(new FloatingText(enemy.x,enemy.y-20,'+'+enemy.goldReward+'💰','#ffcc00'));this.tryDropItem(enemy);}
+  
   tryDropItem(enemy){
-    const isBoss=enemy instanceof Boss;
-    const chance=isBoss?EQUIP.bossDropChance:EQUIP.dropChance;
-    if(Math.random()<chance){
-      const categories=['armor','bracelet','shoes'];
-      const cat=categories[randInt(0,2)];
-      const items=EQUIP[cat];
-      let maxIdx=Math.min(1,items.length-1);
-      if(this.chapterId>=3)maxIdx=Math.min(2,items.length-1);
-      if(this.chapterId>=5||isBoss)maxIdx=items.length-1;
-      const itemIdx=randInt(0,maxIdx);
-      const item=items[itemIdx];
-      this.drops.push(new DropItem(enemy.x,enemy.y-30,cat,item.id));
-      this.floatingTexts.push(new FloatingText(enemy.x,enemy.y-40,item.name+' 掉落!','#44ff88'));
-    }
+    const isBoss=enemy instanceof Boss;const chance=isBoss?EQUIP.bossDropChance:EQUIP.dropChance;
+    if(Math.random()<chance){const categories=['armor','bracelet','shoes'];const cat=categories[randInt(0,2)];const items=EQUIP[cat];let maxIdx=Math.min(1,items.length-1);if(this.chapterId>=3)maxIdx=Math.min(2,items.length-1);if(this.chapterId>=5||isBoss)maxIdx=items.length-1;const itemIdx=randInt(0,maxIdx);const item=items[itemIdx];this.drops.push(new DropItem(enemy.x,enemy.y-30,cat,item.id));this.floatingTexts.push(new FloatingText(enemy.x,enemy.y-40,item.name+' 掉落!','#44ff88'));}
   }
-  hitOverlap(hit,entity){return hit.x-hit.w/2<entity.x+entity.width/2&&hit.x+hit.w/2>entity.x-entity.width/2&&hit.y-hit.h/2<entity.y+entity.height/2&&hit.y+hit.h/2>entity.y-entity.height/2;}
-  spawnHitParticles(x,y,color){for(let i=0;i<12;i++)this.particles.push(new Particle(x,y,{vx:rand(-3,3),vy:rand(-3,1),color:color,life:0.3,size:rand(2,5)}));}
-  spawnDeathParticles(x,y){for(let i=0;i<20;i++)this.particles.push(new Particle(x,y,{vx:rand(-4,4),vy:rand(-4,2),color:'#ffaa00',life:0.6,size:rand(2,6),gravity:0.5}));}
-  checkSceneClear(){
-    if(this.sceneClear)return;
-    const allDead=this.enemies.every(e=>e.dead);
-    const bossDead=!this.boss||this.boss.dead;
-    if(allDead&&bossDead&&this.hasEnemies){this.sceneClear=true;this.onSceneVictory();}
-  }
+  
+  hitOverlap(hit,entity){return hit.x-hit.w/2<entity.x+entity.w/2&&hit.x+hit.w/2>entity.x-entity.w/2&&hit.y-hit.h/2<entity.y+entity.h/2&&hit.y+hit.h/2>entity.y-entity.h/2;}
+  spawnHitParticles(x,y,color){for(let i=0;i<10;i++)this.particles.push(new Particle(x,y,{vx:rand(-3,3),vy:rand(-3,1),color:color,life:0.3,size:rand(2,5)}));}
+  spawnDeathParticles(x,y){for(let i=0;i<15;i++)this.particles.push(new Particle(x,y,{vx:rand(-4,4),vy:rand(-4,2),color:'#ffaa00',life:0.6,size:rand(2,6),gravity:0.5}));}
+  
+  checkSceneClear(){if(this.sceneClear)return;const allDead=this.enemies.every(e=>e.dead);const bossDead=!this.boss||this.boss.dead;if(allDead&&bossDead&&this.hasEnemies){this.sceneClear=true;this.onSceneVictory();}}
+  
   onSceneVictory(){
-    if(this.killedGold>0){DB.addGold(this.killedGold);}
-    if(this.sceneCfg.boss&&this.sceneCfg.finalBoss){
-      this.state='victory';this.victoryScene=true;this.victoryTimer=0;this.victoryAutoReturn=true;
-      if(this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}
-      DB.save();return;
-    }
-    if(this.sceneCfg.boss){
-      this.state='victory';this.victoryScene=true;this.victoryTimer=0;this.victoryAutoReturn=true;
-      if(this.chapterId>=CFG.CHAPTERS.length){}else{
-        if(this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}
-        DB.save();
-      }
-      return;
-    }
+    if(this.killedGold>0)DB.addGold(this.killedGold);
+    if(this.sceneCfg.boss){this.state='victory';this.victoryScene=true;this.victoryTimer=0;this.victoryAutoReturn=true;if(this.sceneCfg.finalBoss&&this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}else if(this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}DB.save();return;}
     this.transitionTimer=1.5;
   }
+  
   gameLoop(timestamp){
     if(!this.running)return;
-    try{const dt=Math.min(0.05,(timestamp-this.lastTime)/1000);this.lastTime=timestamp;this.time+=dt;if(this.state==='playing'&&!this.paused)this.update(dt);this.render();}catch(e){console.error('Game loop error:',e&&e.message?e.message:e,e&&e.stack?e.stack:'');}
+    try{const dt=Math.min(0.05,(timestamp-this.lastTime)/1000);this.lastTime=timestamp;this.time+=dt;if(this.state==='playing'&&!this.paused)this.update(dt);this.render();}catch(e){console.error('loop',e&&e.message?e.message:e);}
     requestAnimationFrame(t=>this.gameLoop(t));
   }
+  
   update(dt){
-    // 胜利自动返回计时
-    if(this.state==='victory'&&this.victoryAutoReturn){
-      this.victoryTimer+=dt;
-      if(this.victoryTimer>=3.0){this.goToMenu();return;}
-    }
+    if(this.state==='victory'&&this.victoryAutoReturn){this.victoryTimer+=dt;if(this.victoryTimer>=3.0){this.goToMenu();return;}}
     if(this.shakeTimer>0)this.shakeTimer=Math.max(0,this.shakeTimer-dt);
-    this.bgRenderer.update(dt);
     const playerAttacking=this.player.attacking||this.player.skilling;
-    this.player.update(dt,this.joystick,this.gameW,this.gameH,this.worldW,this.groundY);
-    const targetCamX=this.player.x-this.gameW/2;
-    this.camX=lerp(this.camX,targetCamX,0.08);
-    this.camX=clamp(this.camX,0,this.worldW-this.gameW);
-    for(const enemy of this.enemies){if(!enemy.fullyRemoved)enemy.update(dt,this.player,playerAttacking,this.enemies);}
-    if(this.boss&&!this.boss.fullyRemoved)this.boss.update(dt,this.player,playerAttacking,this.enemies);
+    this.player.update(dt,this.joystick,this.worldW,this.groundY);
+    const targetCamX=this.player.x-this.gameW/2;this.camX=lerp(this.camX,targetCamX,0.08);this.camX=clamp(this.camX,0,this.worldW-this.gameW);
+    for(const enemy of this.enemies){if(!enemy.fullyRemoved)enemy.update(dt,this.player,playerAttacking);}
+    if(this.boss&&!this.boss.fullyRemoved)this.boss.update(dt,this.player,playerAttacking);
     for(const p of this.particles)p.update(dt);this.particles=this.particles.filter(p=>!p.dead);
     for(const t of this.floatingTexts)t.update(dt);this.floatingTexts=this.floatingTexts.filter(t=>!t.dead);
     for(const d of this.drops){if(!d.dead)d.update(dt,this.player);}this.drops=this.drops.filter(d=>!d.dead);
     this.checkSceneClear();
-    if(this.transitionTimer>0){this.transitionTimer-=dt;if(this.transitionTimer<=0){this.doNextSubLevel();}}
+    if(this.transitionTimer>0){this.transitionTimer-=dt;if(this.transitionTimer<=0)this.doNextSubLevel();}
     if(this.player.hp<=0){this.state='gameover';this.gameOverCause='被敌人击败';}
     if(!this.player.grounded)this.joystick.jumpPressed=false;
   }
+  
   doNextSubLevel(){
     this.subLevelIdx++;
-    if(this.subLevelIdx>=this.chapterCfg.subLevels.length){
-      this.state='victory';this.victoryScene=true;this.victoryTimer=0;this.victoryAutoReturn=true;
-      if(this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}
-      DB.save();return;
-    }
-    this.sceneCfg=this.chapterCfg.subLevels[this.subLevelIdx];
-    this.worldW=this.sceneCfg.width;
-    DB.data.subLevel=this.subLevelIdx+1;
-    if(this.subLevelIdx+1>DB.data.maxSubLevel&&this.chapterId===DB.data.chapter)DB.data.maxSubLevel=this.subLevelIdx+1;
-    DB.save();
-    const currentHp=this.player.hp;
-    this.initScene();
-    this.player.hp=currentHp;
-    this.player.x=100;this.player.y=this.groundY-40;
+    if(this.subLevelIdx>=this.chapterCfg.subLevels.length){this.state='victory';this.victoryScene=true;this.victoryTimer=0;this.victoryAutoReturn=true;if(this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}DB.save();return;}
+    this.sceneCfg=this.chapterCfg.subLevels[this.subLevelIdx];this.worldW=this.sceneCfg.width;
+    DB.data.subLevel=this.subLevelIdx+1;if(this.subLevelIdx+1>DB.data.maxSubLevel&&this.chapterId===DB.data.chapter)DB.data.maxSubLevel=this.subLevelIdx+1;DB.save();
+    const currentHp=this.player.hp;this.initScene();this.player.hp=currentHp;this.player.x=100;this.player.y=this.groundY-40;
   }
+  
   render(){
-    const ctx=this.ctx,w=this.gameW,h=this.gameH;
-    ctx.clearRect(0,0,w,h);
+    const ctx=this.ctx,w=this.gameW,h=this.gameH;ctx.clearRect(0,0,w,h);
     let sx=0,sy=0;if(this.shakeTimer>0){sx=rand(-this.shakeIntensity,this.shakeIntensity);sy=rand(-this.shakeIntensity,this.shakeIntensity);}
     ctx.save();ctx.translate(sx,sy);
     ctx.fillStyle=this.sceneCfg.sky||this.chapterCfg.sky;ctx.fillRect(0,0,w,h);
-    this.bgRenderer.draw(ctx,this.camX,w,h,this.groundY,this.sceneCfg.sky||this.chapterCfg.sky);
+    this.bg.draw(ctx,this.camX,w,h,this.groundY,this.sceneCfg.sky||this.chapterCfg.sky);
     ctx.fillStyle=this.sceneCfg.ground||this.chapterCfg.ground;ctx.fillRect(0,this.groundY,w,h-this.groundY);
     ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,this.groundY);ctx.lineTo(w,this.groundY);ctx.stroke();
-    ctx.fillStyle='rgba(0,0,0,0.04)';for(let i=0;i<w;i+=40)ctx.fillRect(i-this.camX*0.1,this.groundY+10,20,2);
     ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
-    if(this.camX<=5)ctx.fillText('◀ 边界',30,h/2);
-    if(this.camX>=this.worldW-w-5){ctx.fillStyle=this.sceneClear||this.sceneCfg.boss?'rgba(255,255,255,0.3)':'rgba(255,100,100,0.5)';ctx.fillText(this.sceneClear?(this.sceneCfg.boss?'▶ 通关!':'▶ 下一关'):'▶ 击败敌人',w-40,h/2);}
-    ctx.textAlign='start';
     ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='bold 12px sans-serif';ctx.textAlign='right';
-    ctx.fillText('第'+this.chapterId+'章 '+this.chapterCfg.name+' • '+this.sceneCfg.name,w-15,25);ctx.textAlign='start';
+    ctx.fillText('第'+this.chapterId+'章 '+this.chapterCfg.name+' - '+this.sceneCfg.name,w-15,25);ctx.textAlign='start';
     for(const enemy of this.enemies){if(!enemy.fullyRemoved)enemy.draw(ctx,this.camX);}
     if(this.boss&&!this.boss.fullyRemoved)this.boss.draw(ctx,this.camX);
     for(const d of this.drops)if(!d.dead)d.draw(ctx,this.camX);
-    this.player.draw(ctx,this.camX,this.groundY);this.player.drawHealthBar(ctx,this.camX);
+    this.player.draw(ctx,this.camX);
     for(const p of this.particles)p.draw(ctx,this.camX);
     for(const t of this.floatingTexts)t.draw(ctx,this.camX);
     ctx.restore();
-    this.joystick.draw(ctx);this.drawButtons(ctx);this.drawPlayerHUD(ctx);this.drawWeaponInfo(ctx);
-    this.drawGoldHUD(ctx);
-    this.drawPauseBtn(ctx);
-    if(this.sceneClear&&!this.sceneCfg.boss){
-      ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText('敌人已清除!',w/2,h/2-60);ctx.textAlign='start';
-    }
-    if(this.transitionTimer>0){
-      ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 20px sans-serif';ctx.textAlign='center';ctx.fillText('即将进入下一关...',w/2,h/2-30);ctx.textAlign='start';
-    }
-    if(this.paused){
-      ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,w,h);
-      ctx.fillStyle='#ffcc00';ctx.font='bold 28px sans-serif';ctx.textAlign='center';ctx.fillText('游戏暂停',w/2,h/2-60);
-      ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.4,w*0.5,60);ctx.fillStyle='#222';ctx.fillText('继续游戏',w/2,h*0.4+38);
-      ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.55,w*0.5,60);ctx.fillStyle='#222';ctx.fillText('返回主界面',w/2,h*0.55+38);
-      ctx.textAlign='start';
-    }
-    if(this.state==='gameover'){
-      ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,w,h);
-      ctx.fillStyle='#ff4444';ctx.font='bold 30px sans-serif';ctx.textAlign='center';ctx.fillText('战斗失败',w/2,h/2-50);
-      ctx.fillStyle='#fff';ctx.font='18px sans-serif';ctx.fillText(this.gameOverCause,w/2,h/2-10);
-      ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.52,w*0.5,56);ctx.fillStyle='#222';ctx.fillText('返回主界面',w/2,h*0.52+36);
-      ctx.textAlign='start';
-    }
-    if(this.state==='victory'){
-      ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,w,h);
-      ctx.fillStyle='#ffcc00';ctx.font='bold 30px sans-serif';ctx.textAlign='center';ctx.fillText('恭喜通关!',w/2,h/2-50);
-      ctx.fillStyle='#fff';ctx.font='18px sans-serif';ctx.fillText('获得金币: +'+this.killedGold,w/2,h/2-10);
-      if(this.victoryAutoReturn){
-        const remaining=Math.ceil(3.0-this.victoryTimer);
-        ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='14px sans-serif';ctx.fillText(remaining+'秒后自动返回主界面...',w/2,h/2+20);
-      }
-      ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.52,w*0.5,56);ctx.fillStyle='#222';ctx.fillText('返回主界面',w/2,h*0.52+36);
-      ctx.textAlign='start';
-    }
+    this.joystick.draw(ctx);this.drawButtons(ctx);this.drawHUD(ctx);this.drawPauseBtn(ctx);
+    if(this.sceneClear&&!this.sceneCfg.boss){ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText('敌人已清除!',w/2,h/2-60);ctx.textAlign='start';}
+    if(this.transitionTimer>0){ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 20px sans-serif';ctx.textAlign='center';ctx.fillText('即将进入下一关...',w/2,h/2-30);ctx.textAlign='start';}
+    if(this.paused){ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,w,h);ctx.fillStyle='#ffcc00';ctx.font='bold 28px sans-serif';ctx.textAlign='center';ctx.fillText('游戏暂停',w/2,h/2-60);ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.4,w*0.5,60);ctx.fillStyle='#222';ctx.fillText('继续游戏',w/2,h*0.4+38);ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.55,w*0.5,60);ctx.fillStyle='#222';ctx.fillText('返回主界面',w/2,h*0.55+38);ctx.textAlign='start';}
+    if(this.state==='gameover'){ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,w,h);ctx.fillStyle='#ff4444';ctx.font='bold 30px sans-serif';ctx.textAlign='center';ctx.fillText('战斗失败',w/2,h/2-50);ctx.fillStyle='#fff';ctx.font='18px sans-serif';ctx.fillText(this.gameOverCause,w/2,h/2-10);ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.52,w*0.5,56);ctx.fillStyle='#222';ctx.fillText('返回主界面',w/2,h*0.52+36);ctx.textAlign='start';}
+    if(this.state==='victory'){ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,w,h);ctx.fillStyle='#ffcc00';ctx.font='bold 30px sans-serif';ctx.textAlign='center';ctx.fillText('恭喜通关!',w/2,h/2-50);ctx.fillStyle='#fff';ctx.font='18px sans-serif';ctx.fillText('获得金币: +'+this.killedGold,w/2,h/2-10);const remaining=Math.ceil(3.0-this.victoryTimer);ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='14px sans-serif';ctx.fillText(remaining+'秒后自动返回主界面...',w/2,h/2+20);ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.52,w*0.5,56);ctx.fillStyle='#222';ctx.fillText('返回主界面',w/2,h*0.52+36);ctx.textAlign='start';}
   }
-  drawPauseBtn(ctx){
-    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=2;
-    ctx.fillRect(this.pauseBtnArea.x,this.pauseBtnArea.y,this.pauseBtnArea.w,this.pauseBtnArea.h);
-    ctx.strokeRect(this.pauseBtnArea.x,this.pauseBtnArea.y,this.pauseBtnArea.w,this.pauseBtnArea.h);
-    ctx.fillStyle='#fff';ctx.fillRect(this.pauseBtnArea.x+8,this.pauseBtnArea.y+8,6,20);
-    ctx.fillRect(this.pauseBtnArea.x+22,this.pauseBtnArea.y+8,6,20);
+  
+  drawPauseBtn(ctx){ctx.fillStyle='rgba(0,0,0,0.5)';ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=2;ctx.fillRect(this.pauseBtn.x,this.pauseBtn.y,this.pauseBtn.w,this.pauseBtn.h);ctx.strokeRect(this.pauseBtn.x,this.pauseBtn.y,this.pauseBtn.w,this.pauseBtn.h);ctx.fillStyle='#fff';ctx.fillRect(this.pauseBtn.x+8,this.pauseBtn.y+8,6,20);ctx.fillRect(this.pauseBtn.x+22,this.pauseBtn.y+8,6,20);}
+  
+  drawHUD(ctx){
+    const px=15,py=15,bw=130,bh=12;
+    ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.fillText('火柴人战士 Lv.'+this.player.level,px,py+12);
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(px,py+22,bw,bh);
+    const hpR=this.player.hp/this.player.maxHp;ctx.fillStyle=hpR>0.5?'#44cc44':hpR>0.25?'#ff8833':'#ff3333';ctx.fillRect(px,py+22,bw*hpR,bh);
+    ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.fillText(Math.ceil(this.player.hp)+'/'+this.player.maxHp,px+bw/2-15,py+32);
+    ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 13px sans-serif';ctx.textAlign='right';ctx.fillText('💰 +'+this.killedGold,this.gameW-15,this.gameH-160);ctx.textAlign='start';
+    ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='bold 12px sans-serif';ctx.textAlign='right';ctx.fillText('武器: '+this.player.getWeaponCfg().name,this.gameW-15,this.gameH-145);ctx.textAlign='start';
   }
-  drawGoldHUD(ctx){
-    ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 13px sans-serif';ctx.textAlign='right';
-    ctx.fillText('💰 +'+this.killedGold,this.gameW-15,this.gameH-160);ctx.textAlign='start';
-  }
+  
   drawButtons(ctx){
     const ba=this.btnAreas;
     ctx.fillStyle='rgba(255,80,60,0.3)';ctx.strokeStyle='rgba(255,80,60,0.6)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(ba.attack.x,ba.attack.y,ba.attack.r,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 15px sans-serif';ctx.textAlign='center';ctx.fillText('攻击',ba.attack.x,ba.attack.y+5);
@@ -1358,21 +1024,11 @@ class Game{
     if(this.player.skillTimer>0){ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.arc(ba.skill.x,ba.skill.y,ba.skill.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.fillText(Math.ceil(this.player.skillTimer)+'s',ba.skill.x,ba.skill.y+5);}
     ctx.textAlign='start';
   }
-  drawPlayerHUD(ctx){
-    const px=15,py=15;const bw=130,bh=12;
-    ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.fillText('火柴人战士 Lv.'+this.player.level,px,py+12);
-    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(px,py+22,bw,bh);
-    const hpR=this.player.hp/this.player.maxHp;const hpGrad=ctx.createLinearGradient(px,0,px+bw,0);hpGrad.addColorStop(0,'#ff3333');hpGrad.addColorStop(0.5,'#ff8833');hpGrad.addColorStop(1,'#44cc44');
-    ctx.fillStyle=hpGrad;ctx.fillRect(px,py+22,bw*hpR,bh);ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.fillText(Math.ceil(this.player.hp)+'/'+this.player.maxHp,px+bw/2-15,py+32);
-  }
-  drawWeaponInfo(ctx){const wcfg=this.player.getWeaponCfg();ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='bold 12px sans-serif';ctx.textAlign='right';ctx.fillText('武器: '+wcfg.name,this.gameW-15,this.gameH-145);ctx.textAlign='start';}
-  handleClick(gx,gy){
-    if(this.state==='gameover'){this.goToMenu();}
-    else if(this.state==='victory'){this.goToMenu();}
-  }
+  
+  handleClick(gx,gy){this.goToMenu();}
+  
   goToMenu(){
-    this.running=false;
-    this.cleanupInput();
+    this.running=false;this.cleanupInput();
     this.particles=[];this.floatingTexts=[];this.drops=[];this.enemies=[];this.boss=null;
     document.getElementById('gameScreen').classList.add('hidden');
     document.getElementById('mainMenu').classList.remove('hidden');
@@ -1394,9 +1050,9 @@ function updateMenuDisplay(){
   updateLevelUpBtn();
 }
 function updateEquipPanel(){
-  const armor=DB.getEquipByCategory('armor');
-  const bracelet=DB.getEquipByCategory('bracelet');
-  const shoes=DB.getEquipByCategory('shoes');
+  const armor=DB.data.equippedArmor?EQUIP.armor.find(x=>x.id===DB.data.equippedArmor):null;
+  const bracelet=DB.data.equippedBracelet?EQUIP.bracelet.find(x=>x.id===DB.data.equippedBracelet):null;
+  const shoes=DB.data.equippedShoes?EQUIP.shoes.find(x=>x.id===DB.data.equippedShoes):null;
   document.getElementById('slotWeaponVal').textContent=CFG.WEAPONS[DB.data.weapon]?.name||'剑';
   document.getElementById('slotArmorVal').textContent=armor?armor.name:'无';
   document.getElementById('slotBraceletVal').textContent=bracelet?bracelet.name:'无';
@@ -1407,80 +1063,29 @@ function updateEquipPanel(){
   document.getElementById('equipSpd').textContent=(100+(shoes?shoes.spdBonus:0))+'%';
 }
 function toggleEquipmentPanel(){
-  const panel=document.getElementById('equipPanel');
-  const btn=document.querySelector('.panel-toggle-btn');
-  panel.classList.toggle('hidden');
-  if(btn)btn.textContent=panel.classList.contains('hidden')?'展开':'收起';
+  const panel=document.getElementById('equipPanel');const btn=document.querySelector('.panel-toggle-btn');
+  panel.classList.toggle('hidden');if(btn)btn.textContent=panel.classList.contains('hidden')?'展开':'收起';
 }
 function openEquipSelect(category){
-  _currentEquipSelect=category;
-  const overlay=document.getElementById('equipSelectOverlay');
-  const title=document.getElementById('equipSelectTitle');
-  const list=document.getElementById('equipSelectList');
-  const catNames={weapon:'武器',armor:'护甲',bracelet:'手镯',shoes:'鞋子'};
-  title.textContent='选择'+catNames[category];
-  list.innerHTML='';
-  if(category==='weapon'){
-    const currentWeapon=DB.data.weapon;
-    for(const k in CFG.WEAPONS){
-      const wcfg=CFG.WEAPONS[k];
-      const unlocked=DB.data.unlockedWeapons&&DB.data.unlockedWeapons[k];
-      const div=document.createElement('div');
-      div.className='equip-select-item'+(currentWeapon===k?' equipped':'')+(unlocked?'':' locked');
-      div.style.opacity=unlocked?'1':'0.4';
-      div.innerHTML='<span>'+(unlocked?'':'🔒 ')+wcfg.name+'</span><span class="item-stats">攻击x'+wcfg.atkMul+' 范围'+wcfg.range+'</span>';
-      if(unlocked){
-        div.onclick=()=>{DB.equipItem('weapon',k);DB.save();updateMenuDisplay();closeEquipSelect();};
-      }
-      list.appendChild(div);
-    }
-    overlay.classList.remove('hidden');
-    return;
-  }
-  const items=EQUIP[category];
-  const equippedId=DB.getEquipped(category);
-  const unequipDiv=document.createElement('div');
-  unequipDiv.className='equip-select-item';
-  unequipDiv.innerHTML='<span>卸下装备</span>';
-  unequipDiv.onclick=()=>{DB.equipItem(category,null);DB.save();updateMenuDisplay();closeEquipSelect();};
-  list.appendChild(unequipDiv);
-  for(const item of items){
-    const owned=DB.hasItem(category,item.id);
-    if(!owned)continue;
-    const div=document.createElement('div');
-    div.className='equip-select-item'+(equippedId===item.id?' equipped':'');
-    div.innerHTML='<span>'+item.name+'</span><span class="item-stats">'+item.desc+'</span>';
-    div.onclick=()=>{DB.equipItem(category,item.id);DB.save();updateMenuDisplay();closeEquipSelect();};
-    list.appendChild(div);
-  }
+  _currentEquipSelect=category;const overlay=document.getElementById('equipSelectOverlay');const title=document.getElementById('equipSelectTitle');const list=document.getElementById('equipSelectList');const catNames={weapon:'武器',armor:'护甲',bracelet:'手镯',shoes:'鞋子'};title.textContent='选择'+catNames[category];list.innerHTML='';
+  if(category==='weapon'){const currentWeapon=DB.data.weapon;for(const k in CFG.WEAPONS){const wcfg=CFG.WEAPONS[k];const unlocked=DB.data.unlockedWeapons&&DB.data.unlockedWeapons[k];const div=document.createElement('div');div.className='equip-select-item'+(currentWeapon===k?' equipped':'')+(unlocked?'':' locked');div.style.opacity=unlocked?'1':'0.4';div.innerHTML='<span>'+(unlocked?'':'🔒 ')+wcfg.name+'</span><span class="item-stats">攻击x'+wcfg.atkMul+' 范围'+wcfg.range+'</span>';if(unlocked){div.onclick=()=>{DB.equipItem('weapon',k);DB.save();updateMenuDisplay();closeEquipSelect();};}list.appendChild(div);}overlay.classList.remove('hidden');return;}
+  const items=EQUIP[category];const equippedId=DB.getEquipped(category);const unequipDiv=document.createElement('div');unequipDiv.className='equip-select-item';unequipDiv.innerHTML='<span>卸下装备</span>';unequipDiv.onclick=()=>{DB.equipItem(category,null);DB.save();updateMenuDisplay();closeEquipSelect();};list.appendChild(unequipDiv);
+  for(const item of items){const owned=DB.hasItem(category,item.id);if(!owned)continue;const div=document.createElement('div');div.className='equip-select-item'+(equippedId===item.id?' equipped':'');div.innerHTML='<span>'+item.name+'</span><span class="item-stats">'+item.desc+'</span>';div.onclick=()=>{DB.equipItem(category,item.id);DB.save();updateMenuDisplay();closeEquipSelect();};list.appendChild(div);}
   overlay.classList.remove('hidden');
 }
-function closeEquipSelect(){
-  document.getElementById('equipSelectOverlay').classList.add('hidden');
-  _currentEquipSelect=null;
-}
+function closeEquipSelect(){document.getElementById('equipSelectOverlay').classList.add('hidden');_currentEquipSelect=null;}
 function updateLevelUpBtn(){
-  const lv=DB.data.playerLevel;const btn=document.getElementById('btnLevelUp');
-  if(!btn)return;
+  const lv=DB.data.playerLevel;const btn=document.getElementById('btnLevelUp');if(!btn)return;
   if(lv>=CFG.MAX_LEVEL){btn.textContent='已满级 Lv.'+lv;btn.disabled=true;return;}
-  const cost=CFG.LEVEL_COSTS[lv];
-  document.getElementById('btnLevelLv').textContent=lv;
-  document.getElementById('btnLevelNext').textContent=lv+1;
-  document.getElementById('btnLevelCost').textContent=cost;
-  btn.disabled=DB.data.gold<cost;
-  btn.style.opacity=DB.data.gold<cost?'0.4':'1';
+  const cost=CFG.LEVEL_COSTS[lv];document.getElementById('btnLevelLv').textContent=lv;document.getElementById('btnLevelNext').textContent=lv+1;document.getElementById('btnLevelCost').textContent=cost;btn.disabled=DB.data.gold<cost;btn.style.opacity=DB.data.gold<cost?'0.4':'1';
 }
 function buyLevel(){
-  const lv=DB.data.playerLevel;
-  if(lv>=CFG.MAX_LEVEL)return;
-  const cost=CFG.LEVEL_COSTS[lv];
-  if(!DB.spendGold(cost)){alert('金币不足!');return;}
+  const lv=DB.data.playerLevel;if(lv>=CFG.MAX_LEVEL)return;
+  const cost=CFG.LEVEL_COSTS[lv];if(!DB.spendGold(cost)){alert('金币不足!');return;}
   DB.data.playerLevel=lv+1;DB.save();updateMenuDisplay();
 }
-window.buyLevel=buyLevel;
-window.toggleEquipmentPanel=toggleEquipmentPanel;
-window.openEquipSelect=openEquipSelect;
-window.closeEquipSelect=closeEquipSelect;
+window.buyLevel=buyLevel;window.toggleEquipmentPanel=toggleEquipmentPanel;
+window.openEquipSelect=openEquipSelect;window.closeEquipSelect=closeEquipSelect;
 
 // ==================== 启动 ====================
 let _game=null;
@@ -1491,17 +1096,12 @@ function startGame(){
     document.getElementById('gameScreen').classList.remove('hidden');
     if(_game){_game.running=false;_game.cleanupInput();}
     _game=new Game(DB.data.chapter,DB.data.subLevel);
-  }catch(e){console.error('startGame error:',e&&e.message?e.message:e,e&&e.stack?e.stack:'');}
+  }catch(e){console.error('startGame error:',e&&e.message?e.message:e);}
 }
 window.startGame=startGame;
 document.addEventListener('DOMContentLoaded',()=>{
   DB.init();updateMenuDisplay();
-  Assets.loadAll().then(()=>{
-    const el=document.getElementById('loadOverlay');
-    if(el){el.classList.add('load-done');el.style.display='none';}
-  }).catch(()=>{
-    const el=document.getElementById('loadOverlay');
-    if(el){el.classList.add('load-done');el.style.display='none';}
-  });
+  const el=document.getElementById('loadOverlay');
+  if(el){el.classList.add('load-done');el.style.display='none';}
 });
 })();
