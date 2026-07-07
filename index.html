@@ -25,19 +25,37 @@
         <div class="game-title">火柴人战斗</div>
         <div class="game-subtitle">STICKMAN FIGHTER</div>
 
+        <!-- 金币 & 等级 -->
+        <div class="menu-stats">
+            <span>💰 <span id="menuGold">0</span></span>
+            <span>Lv.<span id="menuLevel">1</span></span>
+            <span>武器: <span id="menuWeapon">剑</span></span>
+        </div>
+
+        <!-- 商店 -->
+        <div class="menu-section">
+            <div class="section-title">⚔️ 升级（提升攻击力+10%）</div>
+            <button class="shop-btn" id="btnLevelUp" onclick="buyLevel()">升级 Lv.<span id="btnLevelLv">1</span> → Lv.<span id="btnLevelNext">2</span> · 💰<span id="btnLevelCost">50</span></button>
+        </div>
+
         <div class="menu-section">
             <div class="section-title">选择武器</div>
             <div class="weapon-grid" id="weaponGrid"></div>
         </div>
 
         <div class="menu-section">
-            <div class="section-title">选择关卡</div>
+            <div class="section-title">武器技能（技能伤害+30%）</div>
+            <div class="weapon-grid" id="weaponSkillGrid"></div>
+        </div>
+
+        <div class="menu-section">
+            <div class="section-title">选择章节（每章5小关）</div>
             <div class="scene-grid" id="sceneGrid"></div>
         </div>
 
         <div class="menu-stats">
-            <span>已解锁: 第<span id="menuMaxScene">1</span>关</span>
-            <span>武器: <span id="menuWeapon">剑</span></span>
+            <span>已解锁: 第<span id="menuMaxChapter">1</span>章</span>
+            <span id="menuSubInfo">小关 1/5</span>
         </div>
 
         <button class="btn-start" onclick="startGame()">开始战斗</button>
@@ -54,6 +72,6 @@
     <canvas id="gameCanvas"></canvas>
 </div>
 
-<script src="js/game.js?v=2.1.0"></script>
+<script src="js/game.js?v=3.0.0"></script>
 </body>
 </html>
