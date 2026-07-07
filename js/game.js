@@ -48,7 +48,7 @@ const NinjaSprite={
     return this._loadPromise;
   },
   
-  // 去除白色背景并自动裁剪
+  // 处理图片：去除白色背景，保留原图不裁剪
   _processImage(key,img){
     try{
       const tmp=document.createElement('canvas');
@@ -58,31 +58,14 @@ const NinjaSprite={
       try{
         const data=tctx.getImageData(0,0,tmp.width,tmp.height);
         const px=data.data;
-        let minX=tmp.width,maxX=0,minY=tmp.height,maxY=0;
-        for(let y=0;y<tmp.height;y++){
-          for(let x=0;x<tmp.width;x++){
-            const i=(y*tmp.width+x)*4;
-            const r=px[i],g=px[i+1],b=px[i+2];
-            // 接近白色的像素设为透明
-            if(r>230&&g>230&&b>230){px[i+3]=0;}
-            else if(r>200&&g>200&&b>200){px[i+3]=Math.floor(255*Math.min(1,((r-200)/30))*Math.min(1,((g-200)/30))*Math.min(1,((b-200)/30)));}
-            if(px[i+3]>20){
-              if(x<minX)minX=x;if(x>maxX)maxX=x;
-              if(y<minY)minY=y;if(y>maxY)maxY=y;
-            }
-          }
+        for(let i=0;i<px.length;i+=4){
+          const r=px[i],g=px[i+1],b=px[i+2];
+          // 接近白色的像素设为透明
+          if(r>230&&g>230&&b>230){px[i+3]=0;}
+          else if(r>200&&g>200&&b>200){px[i+3]=Math.floor(255*((r-200)/30)*((g-200)/30)*((b-200)/30));}
         }
         tctx.putImageData(data,0,0);
-        // 裁剪到内容区域
-        const cw=maxX-minX+1,ch=maxY-minY+1;
-        if(cw>10&&ch>10){
-          const cropped=document.createElement('canvas');
-          cropped.width=cw;cropped.height=ch;
-          cropped.getContext('2d').drawImage(tmp,minX,minY,cw,ch,0,0,cw,ch);
-          this._processed[key]=cropped;
-        }else{
-          this._processed[key]=tmp;
-        }
+        this._processed[key]=tmp;
       }catch(e2){
         // Tainted Canvas - 使用原始图片
         this._processed[key]=tmp;
@@ -101,58 +84,53 @@ const NinjaSprite={
     }
     const frames=[];
     const iw=img.width,ih=img.height;
-    // 计算缩放比例，保持比例填满高度
+    // 保持原图比例，居中显示，不做任何扭曲变换
     const scale=h/ih;
-    const drawW=iw*scale;
+    const drawW=Math.min(iw*scale,w);
+    const drawH=h;
     const drawX=(w-drawW)/2;
+    const drawY=0;
     for(let i=0;i<frameCount;i++){
       const t=i/frameCount;
       const c=document.createElement('canvas');c.width=w;c.height=h;
       const ctx=c.getContext('2d');
       ctx.imageSmoothingEnabled=true;
       ctx.imageSmoothingQuality='high';
-      ctx.save();ctx.translate(w/2,h*0.6);
+      // 只做微小的上下浮动模拟呼吸/走路，不做旋转缩放
+      ctx.save();
       switch(animType){
         case'idle':{
+          // 微小呼吸浮动
           const bob=Math.sin(t*Math.PI*2)*2;
           ctx.translate(0,bob);
-          ctx.scale(1+Math.sin(t*Math.PI*2)*0.01,1+Math.sin(t*Math.PI*2+Math.PI)*0.01);
           break;
         }
         case'run':{
-          const bob=Math.abs(Math.sin(t*Math.PI*2))*5;
+          // 跑步时上下弹跳
+          const bob=Math.abs(Math.sin(t*Math.PI*2))*4;
           ctx.translate(0,-bob);
-          ctx.rotate(Math.sin(t*Math.PI*2)*0.06);
-          // 跑步时身体轻微前后晃动
-          ctx.translate(Math.sin(t*Math.PI*2)*3,0);
           break;
         }
         case'attack':{
+          // 攻击时轻微前冲
           const phase=t<0.5?t*2:(1-t)*2;
-          // 攻击动作：预备->挥砍->收回
-          ctx.rotate((t-0.5)*0.7);
-          ctx.translate(phase*12,phase*-4);
-          ctx.scale(1+phase*0.1,1+phase*0.05);
+          ctx.translate(phase*4,0);
           break;
         }
         case'skill':{
-          // 技能：旋转+能量爆发
-          const spin=t*Math.PI*2*0.6;
-          const pulse=Math.sin(t*Math.PI)*0.2;
-          ctx.rotate(spin);
-          ctx.scale(1+pulse,1+pulse);
+          // 技能时上下浮动
+          const pulse=Math.sin(t*Math.PI)*3;
+          ctx.translate(0,-pulse);
           break;
         }
         case'jump':{
-          const jt=t;
-          ctx.rotate(-0.15+jt*0.1);
-          ctx.translate(0,-8+jt*4);
+          // 跳跃时上移
+          ctx.translate(0,-4);
           break;
         }
         default:{ctx.translate(0,Math.sin(t*Math.PI*2)*2);}
       }
-      ctx.translate(-w/2,-h*0.6);
-      ctx.drawImage(img,drawX,0,drawW,h);
+      ctx.drawImage(img,drawX,drawY,drawW,drawH);
       ctx.restore();
       frames.push(c);
     }
