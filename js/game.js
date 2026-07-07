@@ -1,347 +1,114 @@
 /**
- * 火柴人战斗 v7.0 - 逐帧动漫系统 + 攻击卡死修复 + 所有动画重写
+ * 忍者战士 v8.0 - AI精灵图动画系统 + 参考《忍者必须死》风格
  */
 (function(){
 'use strict';
 
-// ==================== 精灵帧生成器 ====================
-const SpriteGen={
+// ==================== 忍者精灵加载与动画系统 ====================
+const NinjaSprite={
+  _images:{},
+  _loaded:false,
   _cache:{},
-  // 绘制火柴人骨架到canvas
-  drawFrame(ctx,cfg,w,h){
-    const cx=w/2,cy=h*0.55;
-    ctx.clearRect(0,0,w,h);
-    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';
-    ctx.fillStyle='#222';
-    
-    const bodyH=cfg.bodyH||50;
-    const hipY=cy+bodyH*0.3;
-    const headY=cy-bodyH*0.8;
-    
-    // 身体前倾
-    ctx.save();
-    if(cfg.lean){
-      ctx.translate(cx,hipY);ctx.rotate(cfg.lean);ctx.translate(-cx,-hipY);
-    }
-    
-    // 身体线
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx,hipY);ctx.stroke();
-    
-    // 头
-    const headRad=cfg.headRad||14;
-    ctx.beginPath();ctx.arc(cx,headY,headRad,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx-3,headY-2,2.5,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(cx+3,headY-2,2.5,0,Math.PI*2);ctx.fill();
-    
-    // 腿
-    const lAng=cfg.lThigh||0.15,rAng=cfg.rThigh||0.15;
-    const lKnee=cfg.lKnee||0.25,rKnee=cfg.rKnee||0.25;
-    const upLen=cfg.upLeg||30,loLen=cfg.loLeg||28;
-    
-    const lKX=cx+Math.sin(lAng)*upLen,lKY=hipY+Math.cos(lAng)*upLen;
-    const lFX=lKX+Math.sin(lAng+lKnee)*loLen,lFY=lKY+Math.cos(lAng+lKnee)*loLen;
-    ctx.strokeStyle='#222';ctx.lineWidth=5;
-    ctx.beginPath();ctx.moveTo(cx,hipY);ctx.lineTo(lKX,lKY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(lKX,lKY);ctx.lineTo(lFX,lFY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKX,lKY,3.5,0,Math.PI*2);ctx.fill();
-    
-    const rKX=cx-Math.sin(rAng)*upLen,rKY=hipY+Math.cos(rAng)*upLen;
-    const rFX=rKX-Math.sin(rAng+rKnee)*loLen,rFY=rKY+Math.cos(rAng+rKnee)*loLen;
-    ctx.beginPath();ctx.moveTo(cx,hipY);ctx.lineTo(rKX,rKY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(rKX,rKY);ctx.lineTo(rFX,rFY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKX,rKY,3.5,0,Math.PI*2);ctx.fill();
-    
-    // 手臂
-    const shY=cy;
-    const aUp=cfg.aUpLen||20,aFore=cfg.aForeLen||20;
-    const fAng=cfg.fArm||0.35,fEl=cfg.fElbow||0.3;
-    const bAng=cfg.bArm||0.35,bEl=cfg.bElbow||0.3;
-    
-    const fEX=cx+Math.cos(Math.PI*fAng)*aUp,fEY=shY-Math.sin(Math.PI*fAng)*aUp;
-    const fHX=fEX+Math.cos(Math.PI*(fAng-fEl))*aFore,fHY=fEY-Math.sin(Math.PI*(fAng-fEl))*aFore;
-    ctx.beginPath();ctx.moveTo(cx,shY);ctx.lineTo(fEX,fEY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(fEX,fEY);ctx.lineTo(fHX,fHY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fEX,fEY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fHX,fHY,4,0,Math.PI*2);ctx.fill();
-    
-    const bEX=cx-Math.cos(Math.PI*bAng)*aUp,bEY=shY-Math.sin(Math.PI*bAng)*aUp;
-    const bHX=bEX-Math.cos(Math.PI*(bAng-bEl))*aFore,bHY=bEY-Math.sin(Math.PI*(bAng-bEl))*aFore;
-    ctx.beginPath();ctx.moveTo(cx,shY);ctx.lineTo(bEX,bEY);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(bEX,bEY);ctx.lineTo(bHX,bHY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bEX,bEY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHX,bHY,4,0,Math.PI*2);ctx.fill();
-    
-    cfg._handX=fHX;cfg._handY=fHY;
-    cfg._handAngle=fAng-fEl;
-    
-    // 武器
-    if(cfg.weaponLen){
-      const wLen=cfg.weaponLen,wWid=cfg.weaponWid||5;
-      const angle=Math.PI*(fAng-fEl);
-      const tipX=fHX+Math.cos(angle)*wLen,tipY=fHY-Math.sin(angle)*wLen;
-      const midX=fHX+Math.cos(angle)*wLen*0.4,midY=fHY-Math.sin(angle)*wLen*0.4;
-      ctx.strokeStyle='#8B4513';ctx.lineWidth=wWid*0.6;
-      ctx.beginPath();ctx.moveTo(fHX,fHY);ctx.lineTo(midX,midY);ctx.stroke();
-      ctx.strokeStyle=cfg.weaponColor||'#aaa';ctx.lineWidth=wWid;
-      ctx.beginPath();ctx.moveTo(midX,midY);ctx.lineTo(tipX,tipY);ctx.stroke();
-    }
-    
-    ctx.restore();
+  _loading:false,
+  _loadPromise:null,
+  
+  load(){
+    if(this._loading)return this._loadPromise;
+    this._loading=true;
+    const map={
+      playerIdle:'assets/sprites/player_idle.jpg',
+      playerRun:'assets/sprites/player_run_1.jpg',
+      playerJump:'assets/sprites/player_jump.jpg',
+      playerAtkSword:'assets/sprites/player_atk_sword.jpg',
+      playerAtkKnife:'assets/sprites/player_atk_knife.jpg',
+      playerAtkStaff:'assets/sprites/player_atk_staff.jpg',
+      playerAtkSpear:'assets/sprites/player_atk_spear.jpg',
+      playerSkill:'assets/sprites/player_skill.jpg',
+      enemyIdle:'assets/sprites/enemy_idle.jpg',
+      enemyRun:'assets/sprites/enemy_run.jpg',
+      bossIdle:'assets/sprites/boss_idle.jpg',
+    };
+    const total=Object.keys(map).length;
+    let loaded=0;
+    this._loadPromise=new Promise(resolve=>{
+      const checkDone=()=>{loaded++;if(loaded>=total){this._loaded=true;resolve();}};
+      for(const[key,src]of Object.entries(map)){
+        const img=new Image();
+        img.onload=checkDone;
+        img.onerror=checkDone;
+        img.src=src;
+        this._images[key]=img;
+      }
+    });
+    return this._loadPromise;
   },
   
-  // 生成一组动画帧
-  generateFrames(w,h,configs){
+  getFrames(key,w,h,frameCount,animType){
+    const ck=key+'_'+w+'x'+h+'_'+frameCount;
+    if(this._cache[ck])return this._cache[ck];
+    const img=this._images[key];
+    if(!img||!img.complete||img.naturalWidth===0){
+      return this._makeFallbackFrames(w,h,frameCount);
+    }
     const frames=[];
-    for(const cfg of configs){
+    for(let i=0;i<frameCount;i++){
+      const t=i/frameCount;
       const c=document.createElement('canvas');c.width=w;c.height=h;
-      this.drawFrame(c.getContext('2d'),cfg,w,h);
+      const ctx=c.getContext('2d');
+      ctx.save();ctx.translate(w/2,h/2);
+      switch(animType){
+        case'idle':{ctx.translate(0,Math.sin(t*Math.PI*2)*2);break;}
+        case'run':{ctx.translate(0,Math.sin(t*Math.PI*2)*4);ctx.rotate(Math.sin(t*Math.PI*2)*0.04);break;}
+        case'attack':{const phase=t<0.5?t*2:(1-t)*2;ctx.rotate((t-0.5)*0.5);ctx.translate(phase*8,0);break;}
+        case'skill':{ctx.rotate(t*0.8);const s=1+Math.sin(t*Math.PI)*0.15;ctx.scale(s,s);break;}
+        case'jump':{ctx.rotate(-0.08);ctx.translate(0,-5);break;}
+        default:{ctx.translate(0,Math.sin(t*Math.PI*2)*2);}
+      }
+      ctx.translate(-w/2,-h/2);
+      ctx.drawImage(img,0,0,w,h);
+      ctx.restore();
       frames.push(c);
     }
+    this._cache[ck]=frames;
     return frames;
   },
   
-  // 获取或创建动画
-  getAnim(key,w,h,configs){
-    if(this._cache[key])return this._cache[key];
-    this._cache[key]=this.generateFrames(w,h,configs);
-    return this._cache[key];
+  _makeFallbackFrames(w,h,n){
+    const frames=[];
+    for(let i=0;i<n;i++){
+      const t=i/n*Math.PI*2;
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.fillStyle='#333';
+      ctx.beginPath();ctx.arc(w/2,h*0.4+Math.sin(t)*1,12,0,Math.PI*2);ctx.fill();
+      ctx.fillRect(w/2-3,h*0.4+12,6,30);
+      ctx.fillRect(w/2-3,h*0.4+12,15,5);
+      ctx.fillRect(w/2-12,h*0.4+12,15,5);
+      ctx.fillRect(w/2-3,h*0.4+25,12,5);
+      ctx.fillRect(w/2-9,h*0.4+25,12,5);
+      frames.push(c);
+    }
+    return frames;
   }
 };
 
 // ==================== 动画配置 ====================
 const ANIM={
-  // 玩家待机 - 呼吸起伏
-  playerIdle(w,h){
-    const frames=[];
-    for(let i=0;i<8;i++){
-      const t=i/8*Math.PI*2;
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:0.15,rThigh:0.15,lKnee:0.25,rKnee:0.25,
-        fArm:0.35,bArm:0.35,fElbow:0.3,bElbow:0.3,
-        lean:0.03, breathBob:Math.sin(t)*2
-      });
-    }
-    return SpriteGen.getAnim('playerIdle',w,h,frames);
-  },
-  
-  // 玩家跑步 - 8帧循环
-  playerRun(w,h){
-    const frames=[];
-    for(let i=0;i<8;i++){
-      const t=i/8*Math.PI*2;
-      const swing=Math.sin(t)*0.55;
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:0.15+swing,rThigh:0.15-swing,
-        lKnee:0.25+Math.abs(swing)*0.5,rKnee:0.25+Math.abs(swing)*0.5,
-        fArm:0.35+swing*0.6,bArm:0.35-swing*0.6,
-        fElbow:0.2+Math.abs(swing)*0.5,bElbow:0.2+Math.abs(swing)*0.5,
-        lean:0.15
-      });
-    }
-    return SpriteGen.getAnim('playerRun',w,h,frames);
-  },
-  
-  // 玩家跳跃
-  playerJump(w,h){
-    const frames=[];
-    for(let i=0;i<4;i++){
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:-0.1,rThigh:0.3,lKnee:0.5,rKnee:0.3,
-        fArm:0.55,bArm:0.55,fElbow:0.4,bElbow:0.4,
-        lean:0.08
-      });
-    }
-    return SpriteGen.getAnim('playerJump',w,h,frames);
-  },
-  
-  // 剑攻击 - 横扫
-  playerAtkSword(w,h){
-    const frames=[];
-    const poses=[{f:0.7,b:-0.4,fe:0.5,be:0.15},{f:0.9,b:-0.3,fe:0.4,be:0.12},{f:1.2,b:-0.1,fe:0.25,be:0.08},{f:1.6,b:-0.1,fe:0.15,be:0.08},{f:1.2,b:0.1,fe:0.25,be:0.12},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:26,weaponWid:5,weaponColor:'#ffdd44'
-      });
-    }
-    return SpriteGen.getAnim('playerAtkSword',w,h,frames);
-  },
-  
-  // 棍攻击 - 下砸
-  playerAtkStaff(w,h){
-    const frames=[];
-    const poses=[{f:-0.5,b:-0.6,fe:0.6,be:0.4},{f:-0.3,b:-0.4,fe:0.4,be:0.3},{f:1.3,b:-0.2,fe:0.15,be:0.08},{f:1.7,b:-0.1,fe:0.1,be:0.08},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:32,weaponWid:4,weaponColor:'#ffaa44'
-      });
-    }
-    return SpriteGen.getAnim('playerAtkStaff',w,h,frames);
-  },
-  
-  // 刀攻击 - 斜劈
-  playerAtkKnife(w,h){
-    const frames=[];
-    const poses=[{f:-0.3,b:-0.3,fe:0.4,be:0.2},{f:-0.1,b:-0.2,fe:0.3,be:0.15},{f:1.0,b:-0.1,fe:0.25,be:0.08},{f:1.4,b:-0.1,fe:0.2,be:0.08},{f:0.8,b:0.1,fe:0.3,be:0.12},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:22,weaponWid:6,weaponColor:'#ff6644'
-      });
-    }
-    return SpriteGen.getAnim('playerAtkKnife',w,h,frames);
-  },
-  
-  // 枪攻击 - 直刺
-  playerAtkSpear(w,h){
-    const frames=[];
-    const poses=[{f:0.35,b:0.35,fe:0.3,be:0.3},{f:0.2,b:0.1,fe:0.15,be:0.1},{f:0.12,b:-0.05,fe:0.05,be:0.05},{f:0.1,b:-0.05,fe:0.05,be:0.05},{f:0.2,b:0.1,fe:0.15,be:0.1},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:34,weaponWid:4,weaponColor:'#88ccff'
-      });
-    }
-    return SpriteGen.getAnim('playerAtkSpear',w,h,frames);
-  },
-  
-  // 玩家技能
-  playerSkill(w,h){
-    const frames=[];
-    const poses=[{f:0.5,b:-0.5,fe:0.4,be:0.3},{f:0.75,b:-0.75,fe:0.55,be:0.4},{f:1.0,b:-0.5,fe:0.3,be:0.2},{f:1.5,b:-0.2,fe:0.15,be:0.08},{f:1.8,b:-0.15,fe:0.1,be:0.08},{f:1.2,b:0.1,fe:0.2,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:50,headRad:14,upLeg:30,loLeg:28,aUpLen:20,aForeLen:20,
-        lThigh:0.28,rThigh:0.05,lKnee:0.25,rKnee:0.05,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:30,weaponWid:5,weaponColor:'#ff6644'
-      });
-    }
-    return SpriteGen.getAnim('playerSkill',w,h,frames);
-  },
-  
-  // 敌人待机
-  enemyIdle(w,h){
-    const frames=[];
-    for(let i=0;i<8;i++){
-      const t=i/8*Math.PI*2;
-      frames.push({
-        bodyH:44,headRad:12,upLeg:26,loLeg:24,aUpLen:17,aForeLen:17,
-        lThigh:0.15,rThigh:0.15,lKnee:0.25,rKnee:0.25,
-        fArm:0.35,bArm:0.35,fElbow:0.3,bElbow:0.3,
-        lean:0.02
-      });
-    }
-    return SpriteGen.getAnim('enemyIdle',w,h,frames);
-  },
-  
-  // 敌人跑步
-  enemyRun(w,h){
-    const frames=[];
-    for(let i=0;i<8;i++){
-      const t=i/8*Math.PI*2;
-      const swing=Math.sin(t)*0.55;
-      frames.push({
-        bodyH:44,headRad:12,upLeg:26,loLeg:24,aUpLen:17,aForeLen:17,
-        lThigh:0.15+swing,rThigh:0.15-swing,
-        lKnee:0.25+Math.abs(swing)*0.5,rKnee:0.25+Math.abs(swing)*0.5,
-        fArm:0.35+swing*0.6,bArm:0.35-swing*0.6,
-        fElbow:0.2+Math.abs(swing)*0.5,bElbow:0.2+Math.abs(swing)*0.5,
-        lean:0.15
-      });
-    }
-    return SpriteGen.getAnim('enemyRun',w,h,frames);
-  },
-  
-  // 敌人攻击
-  enemyAttack(w,h){
-    const frames=[];
-    const poses=[{f:0.6,b:-0.4,fe:0.5,be:0.15},{f:0.9,b:-0.2,fe:0.3,be:0.1},{f:1.5,b:-0.15,fe:0.15,be:0.08},{f:1.0,b:0.1,fe:0.25,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:44,headRad:12,upLeg:26,loLeg:24,aUpLen:17,aForeLen:17,
-        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:18,weaponWid:4,weaponColor:'#ff6644'
-      });
-    }
-    return SpriteGen.getAnim('enemyAttack',w,h,frames);
-  },
-  
-  // BOSS待机
-  bossIdle(w,h){
-    const frames=[];
-    for(let i=0;i<8;i++){
-      const t=i/8*Math.PI*2;
-      frames.push({
-        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
-        lThigh:0.15,rThigh:0.15,lKnee:0.25,rKnee:0.25,
-        fArm:0.35,bArm:0.35,fElbow:0.3,bElbow:0.3,
-        lean:0.02
-      });
-    }
-    return SpriteGen.getAnim('bossIdle',w,h,frames);
-  },
-  
-  // BOSS跑步
-  bossRun(w,h){
-    const frames=[];
-    for(let i=0;i<8;i++){
-      const t=i/8*Math.PI*2;
-      const swing=Math.sin(t)*0.5;
-      frames.push({
-        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
-        lThigh:0.15+swing,rThigh:0.15-swing,
-        lKnee:0.25+Math.abs(swing)*0.45,rKnee:0.25+Math.abs(swing)*0.45,
-        fArm:0.35+swing*0.5,bArm:0.35-swing*0.5,
-        fElbow:0.2+Math.abs(swing)*0.4,bElbow:0.2+Math.abs(swing)*0.4,
-        lean:0.12
-      });
-    }
-    return SpriteGen.getAnim('bossRun',w,h,frames);
-  },
-  
-  // BOSS攻击
-  bossAttack(w,h){
-    const frames=[];
-    const poses=[{f:0.6,b:-0.4,fe:0.5,be:0.15},{f:0.9,b:-0.2,fe:0.3,be:0.1},{f:1.5,b:-0.15,fe:0.15,be:0.08},{f:1.0,b:0.1,fe:0.25,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
-        lThigh:0.22,rThigh:0.1,lKnee:0.1,rKnee:0.1,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:44,weaponWid:10,weaponColor:'#ff8844'
-      });
-    }
-    return SpriteGen.getAnim('bossAttack',w,h,frames);
-  },
-  
-  // BOSS技能
-  bossSkill(w,h){
-    const frames=[];
-    const poses=[{f:-0.5,b:-0.5,fe:0.5,be:0.4},{f:-0.3,b:-0.4,fe:0.4,be:0.3},{f:1.3,b:-0.2,fe:0.15,be:0.08},{f:1.7,b:-0.1,fe:0.1,be:0.08},{f:1.0,b:0.1,fe:0.2,be:0.12},{f:0.5,b:0.2,fe:0.3,be:0.15},{f:0.35,b:0.35,fe:0.3,be:0.3},{f:0.35,b:0.35,fe:0.3,be:0.3}];
-    for(const p of poses){
-      frames.push({
-        bodyH:60,headRad:18,upLeg:36,loLeg:32,aUpLen:25,aForeLen:25,
-        lThigh:0.25,rThigh:0.05,lKnee:0.2,rKnee:0.05,
-        fArm:p.f,bArm:p.b,fElbow:p.fe,bElbow:p.be,
-        lean:0.05,weaponLen:44,weaponWid:10,weaponColor:'#ff4444'
-      });
-    }
-    return SpriteGen.getAnim('bossSkill',w,h,frames);
-  },
+  playerIdle(w,h){return NinjaSprite.getFrames('playerIdle',w,h,8,'idle');},
+  playerRun(w,h){return NinjaSprite.getFrames('playerRun',w,h,8,'run');},
+  playerJump(w,h){return NinjaSprite.getFrames('playerJump',w,h,4,'jump');},
+  playerAtkSword(w,h){return NinjaSprite.getFrames('playerAtkSword',w,h,6,'attack');},
+  playerAtkStaff(w,h){return NinjaSprite.getFrames('playerAtkStaff',w,h,6,'attack');},
+  playerAtkKnife(w,h){return NinjaSprite.getFrames('playerAtkKnife',w,h,6,'attack');},
+  playerAtkSpear(w,h){return NinjaSprite.getFrames('playerAtkSpear',w,h,6,'attack');},
+  playerSkill(w,h){return NinjaSprite.getFrames('playerSkill',w,h,8,'skill');},
+  enemyIdle(w,h){return NinjaSprite.getFrames('enemyIdle',w,h,8,'idle');},
+  enemyRun(w,h){return NinjaSprite.getFrames('enemyRun',w,h,8,'run');},
+  enemyAttack(w,h){return NinjaSprite.getFrames('enemyIdle',w,h,6,'attack');},
+  bossIdle(w,h){return NinjaSprite.getFrames('bossIdle',w,h,8,'idle');},
+  bossRun(w,h){return NinjaSprite.getFrames('bossIdle',w,h,8,'run');},
+  bossAttack(w,h){return NinjaSprite.getFrames('bossIdle',w,h,6,'attack');},
+  bossSkill(w,h){return NinjaSprite.getFrames('bossIdle',w,h,8,'skill');},
 };
 
 // ==================== 配置 ====================
@@ -399,7 +166,7 @@ const CFG={
   BOSS_SKILLS:{cooldown:8,groundSlam:{range:120,dmg:30,name:'地震踩踏'},charge:{range:200,dmg:25,name:'冲锋撞击'},projectile:{range:300,dmg:20,name:'能量弹'}},
   LEVEL_COSTS:[0,50,120,250,500,1000,2000,4000,8000,16000],
   MAX_LEVEL:10,
-  SAVE_KEY:'stickman_rpg_v7',
+  SAVE_KEY:'stickman_rpg_v8',
 };
 
 // ==================== 装备 ====================
@@ -489,7 +256,7 @@ class Background{
 // ==================== 玩家 ====================
 class Player{
   constructor(x,y,level,hp){
-    this.x=x;this.y=y;this.vx=0;this.vy=0;this.w=40;this.h=80;
+    this.x=x;this.y=y;this.vx=0;this.vy=0;this.w=60;this.h=100;
     this.level=level||1;this.maxHp=CFG.PLAYER.hp+this.level*10;
     this.hp=(hp!==undefined&&hp>0)?hp:this.maxHp;
     this.spd=CFG.PLAYER.spd;this.facingRight=true;this.grounded=false;
@@ -585,7 +352,7 @@ class Enemy{
   constructor(type,x,y,groundY,idx,chapterId){
     const cfg=CFG.ENEMIES[type];this.cfg=cfg;this.type=type;this.name=cfg.name;
     const scale=getChapterScale(chapterId||1);
-    this.x=x;this.y=y;this.groundY=groundY;this.w=36;this.h=70;
+    this.x=x;this.y=y;this.groundY=groundY;this.w=52;this.h=90;
     this.maxHp=Math.floor(cfg.hp*scale);this.hp=this.maxHp;
     this.atk=Math.floor(cfg.atk*scale);this.spd=cfg.spd;this.atkRange=cfg.atkRange;
     this.sight=cfg.sight;this.atkCd=cfg.atkCd;this.dodge=cfg.dodge;
@@ -674,7 +441,7 @@ class Boss extends Enemy{
     super('sword',x,y,groundY,0,chapterId);
     const bcfg=cfgOverride||CFG.BOSS_CFG;
     const scale=getChapterScale(chapterId||1);
-    this.w=50;this.h=100;
+    this.w=72;this.h=120;
     this.maxHp=Math.floor(bcfg.hp*scale);this.hp=this.maxHp;
     this.armor=Math.floor(bcfg.armor*scale);this.armorMax=this.armor;
     this.atk=Math.floor(bcfg.atk*scale);this.spd=bcfg.spd;
@@ -1008,7 +775,7 @@ class Game{
   
   drawHUD(ctx){
     const px=15,py=15,bw=130,bh=12;
-    ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.fillText('火柴人战士 Lv.'+this.player.level,px,py+12);
+    ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.fillText('忍者战士 Lv.'+this.player.level,px,py+12);
     ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(px,py+22,bw,bh);
     const hpR=this.player.hp/this.player.maxHp;ctx.fillStyle=hpR>0.5?'#44cc44':hpR>0.25?'#ff8833':'#ff3333';ctx.fillRect(px,py+22,bw*hpR,bh);
     ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.fillText(Math.ceil(this.player.hp)+'/'+this.player.maxHp,px+bw/2-15,py+32);
@@ -1100,8 +867,14 @@ function startGame(){
 }
 window.startGame=startGame;
 document.addEventListener('DOMContentLoaded',()=>{
-  DB.init();updateMenuDisplay();
+  DB.init();
   const el=document.getElementById('loadOverlay');
-  if(el){el.classList.add('load-done');el.style.display='none';}
+  document.getElementById('loadText').textContent='加载角色素材...';
+  document.getElementById('loadBar').style.width='30%';
+  NinjaSprite.load().then(()=>{
+    document.getElementById('loadBar').style.width='100%';
+    updateMenuDisplay();
+    if(el){el.classList.add('load-done');el.style.display='none';}
+  });
 });
 })();
