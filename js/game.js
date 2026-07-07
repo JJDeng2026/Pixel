@@ -1,5 +1,5 @@
 /**
- * 火柴人战斗 v4.0 - 装备系统/暂停/掉落/HP保留/跑步动画/变大/聪明AI
+ * 火柴人战斗 v5.0 - 动画关节修复/武器面板切换/AI修复/去边框/血量系统
  */
 (function(){
 'use strict';
@@ -61,9 +61,8 @@ const EQUIP={
     {id:'shoes3',name:'铁靴',spdBonus:15,desc:'速度+15%'},
     {id:'shoes4',name:'风行者',spdBonus:25,desc:'速度+25%'},
   ],
-  dropRarity:['common','common','common','uncommon','uncommon','rare'],
-  dropChance:0.12, // 12%掉落率
-  bossDropChance:0.6, // 60%掉落率
+  dropChance:0.12,
+  bossDropChance:0.6,
 };
 
 // ==================== 配置 ====================
@@ -76,9 +75,9 @@ const CFG={
     spear:{name:'枪',atkMul:1.1,range:75,speed:0.9,color:'#88ccff',efSlash:'efSpearThrust',efSkill:'efSkillSpear',wLen:34,wWid:4,skillCost:130},
   },
   ENEMIES:{
-    sword:{name:'剑士',hp:40,atk:8,spd:1.5,atkRange:50,sight:350,atkCd:1.5,dodge:0.3,xp:20,color:'#c22',jumpChance:0.15,gold:10},
-    spear:{name:'枪兵',hp:35,atk:10,spd:1.8,atkRange:65,sight:380,atkCd:1.8,dodge:0.25,xp:25,color:'#c44',jumpChance:0.2,gold:12},
-    axe:{name:'斧兵',hp:55,atk:14,spd:1.2,atkRange:40,sight:330,atkCd:2.0,dodge:0.15,xp:35,color:'#c55',jumpChance:0.1,gold:15},
+    sword:{name:'剑士',hp:40,atk:8,spd:1.5,atkRange:50,sight:450,atkCd:1.5,dodge:0.3,xp:20,color:'#c22',jumpChance:0.15,gold:10},
+    spear:{name:'枪兵',hp:35,atk:10,spd:1.8,atkRange:65,sight:480,atkCd:1.8,dodge:0.25,xp:25,color:'#c44',jumpChance:0.2,gold:12},
+    axe:{name:'斧兵',hp:55,atk:14,spd:1.2,atkRange:40,sight:430,atkCd:2.0,dodge:0.15,xp:35,color:'#c55',jumpChance:0.1,gold:15},
   },
   CHAPTER_COLORS:[
     ['#cc2222','#cc4444','#cc5555'],
@@ -87,7 +86,7 @@ const CFG={
     ['#cc6622','#dd7733','#ee8844'],
     ['#222222','#333344','#444466'],
   ],
-  BOSS_CFG:{hp:300,armor:150,atk:20,spd:1.0,atkRange:60,sight:400,atkCd:2.5,stunDuration:2,xp:200,gold:80},
+  BOSS_CFG:{hp:300,armor:150,atk:20,spd:1.0,atkRange:60,sight:500,atkCd:2.5,stunDuration:2,xp:200,gold:80},
   CHAPTERS:[
     {id:1,name:'草原',sky:'#87CEEB',ground:'#7ec850',subLevels:[
       {id:1,name:'草原·1',enemies:[{type:'sword',count:5},{type:'spear',count:1}],boss:false,width:2200,buildings:4},
@@ -127,7 +126,7 @@ const CFG={
   ],
   LEVEL_COSTS:[0,50,120,250,500,1000,2000,4000,8000,16000],
   MAX_LEVEL:10,
-  SAVE_KEY:'stickman_rpg_v4',
+  SAVE_KEY:'stickman_rpg_v5',
 };
 
 // ==================== 存档 ====================
@@ -138,6 +137,11 @@ const DB={
     if(!this.data.weaponSkills)this.data.weaponSkills={};
     if(!this.data.unlockedWeapons)this.data.unlockedWeapons={sword:true};
     if(!this.data.inventory)this.data.inventory={};
+    // 迁移旧存档
+    const oldRaw=localStorage.getItem('stickman_rpg_v4');
+    if(oldRaw&&!this.data.inventory||Object.keys(this.data.inventory||{}).length===0){
+      try{const od=JSON.parse(oldRaw);if(od.inventory){this.data.inventory=od.inventory;this.data.equippedArmor=od.equippedArmor;this.data.equippedBracelet=od.equippedBracelet;this.data.equippedShoes=od.equippedShoes;this.save();}}catch(e){}
+    }
   },
   save(){try{localStorage.setItem(CFG.SAVE_KEY,JSON.stringify(this.data));}catch(e){}},
   addGold(amount){this.data.gold+=amount;this.save();},
@@ -149,14 +153,17 @@ const DB={
   },
   hasItem(category,itemId){return this.data.inventory[category]&&this.data.inventory[category].includes(itemId);},
   getEquipped(category){
+    if(category==='weapon')return this.data.weapon;
     const key={armor:'equippedArmor',bracelet:'equippedBracelet',shoes:'equippedShoes'}[category];
     return key?this.data[key]:null;
   },
   equipItem(category,itemId){
+    if(category==='weapon'){this.data.weapon=itemId;this.save();return;}
     const key={armor:'equippedArmor',bracelet:'equippedBracelet',shoes:'equippedShoes'}[category];
     if(key){this.data[key]=itemId;this.save();}
   },
   getEquipByCategory(category){
+    if(category==='weapon')return CFG.WEAPONS[this.data.weapon]||null;
     const itemId=this.getEquipped(category);
     if(!itemId)return null;
     return EQUIP[category].find(e=>e.id===itemId)||null;
@@ -307,7 +314,7 @@ class BackgroundRenderer{
 
 function getChapterScale(chapterId){return 1+(chapterId-1)*0.5;}
 
-// ==================== 玩家类（变大:40x80） ====================
+// ==================== 玩家类（40x80，参考图片动画关节） ====================
 class Player{
   constructor(x,y,level,hp){
     this.x=x;this.y=y;this.vx=0;this.vy=0;this.width=40;this.height=80;
@@ -319,7 +326,6 @@ class Player{
     this.animState='idle';this.animTimer=0;this.walkCycle=0;this.breathCycle=0;
     this.attacking=false;this.attackPhase=0;this.skilling=false;this.skillPhase=0;
     this.weapon='sword';
-    this.regenTimer=0;
   }
   getAtkMul(){return 1+(this.level-1)*0.1;}
   getWeaponCfg(){return CFG.WEAPONS[this.weapon]||CFG.WEAPONS.sword;}
@@ -334,12 +340,7 @@ class Player{
     this.animTimer+=dt;this.atkTimer=Math.max(0,this.atkTimer-dt);this.skillTimer=Math.max(0,this.skillTimer-dt);
     this.invulnTimer=Math.max(0,this.invulnTimer-dt);this.hitFlash=Math.max(0,this.hitFlash-dt);
     this.breathCycle+=dt*2.5;
-    // 手镯回血
-    const regen=DB.getRegen();
-    if(regen>0){
-      this.regenTimer+=dt;
-      if(this.regenTimer>=1){this.regenTimer-=1;this.hp=Math.min(this.maxHp,this.hp+regen);}
-    }
+    // 不再自动回血 - 关卡中血量不自动恢复
     const wcfg=this.getWeaponCfg();
     this.vx=joystick.dx*this.spd*wcfg.speed*this.getSpdBonus();
     if(Math.abs(this.vx)>0.1)this.facingRight=this.vx>0;
@@ -358,7 +359,6 @@ class Player{
   takeDamage(dmg){if(this.invulnTimer>0)return;const def=DB.getDefense();const actualDmg=Math.floor(dmg*(1-def/100));this.hp-=actualDmg;this.invulnTimer=0.3;this.hitFlash=0.15;this.vy=-3;if(this.hp<=0)this.hp=0;}
   pickupItem(category,itemId){
     DB.addItem(category,itemId);
-    // 自动装备更高级的
     const items=EQUIP[category];
     const currentId=DB.getEquipped(category);
     const newIdx=items.findIndex(e=>e.id===itemId);
@@ -387,13 +387,22 @@ class Player{
     const h=this.height,bodyLen=h*0.28;
     const breathBob=this.animState==='idle'?Math.sin(this.breathCycle)*2.5:0;
     const by=oy+breathBob;
-    ctx.strokeStyle='#222';ctx.lineWidth=4;ctx.lineCap='round';ctx.lineJoin='round';
-    // 身体
+    // 身体前倾角度（参考图片：奔跑时前倾15-20°）
+    const leanAngle=this.animState==='walk'?0.15:(this.animState==='jump'?0.08:0.03);
+    ctx.save();
+    // 以髋部为轴心前倾
+    const hipY=by+bodyLen*0.7;
+    ctx.translate(ox,hipY);
+    ctx.rotate(leanAngle);
+    ctx.translate(-ox,-hipY);
+    
+    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';
+    // 身体（粗线）
     ctx.beginPath();ctx.moveTo(ox,by-bodyLen*0.3);ctx.lineTo(ox,by+bodyLen*0.7);ctx.stroke();
     // 护甲装备显示
     const armor=DB.getEquipByCategory('armor');
-    if(armor){ctx.strokeStyle=armor.def>=30?'#6677aa':armor.def>=20?'#999':'#bbb';ctx.lineWidth=3;ctx.strokeRect(ox-14,by-bodyLen*0.15-2,28,bodyLen*1.0);ctx.strokeStyle='#222';ctx.lineWidth=4;}
-    // 头
+    if(armor){ctx.strokeStyle=armor.def>=30?'#6677aa':armor.def>=20?'#999':'#bbb';ctx.lineWidth=3;ctx.strokeRect(ox-14,by-bodyLen*0.15-2,28,bodyLen*1.0);ctx.strokeStyle='#222';ctx.lineWidth=5;}
+    // 头（圆形）
     const headBob=this.animState==='idle'?Math.sin(this.animTimer*3)*1.5:0;
     ctx.fillStyle='#222';ctx.beginPath();ctx.arc(ox,by-bodyLen*0.3-9+headBob,11,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ox-4,by-bodyLen*0.3-11+headBob,2.5,0,Math.PI*2);ctx.fill();
@@ -407,68 +416,72 @@ class Player{
       ctx.fillRect(ox-6,by+bodyLen*0.7+bodyLen*0.8+bodyLen*0.7-5,12,6);
       ctx.fillRect(ox-14,by+bodyLen*0.7+bodyLen*0.8+bodyLen*0.7-5,12,6);
     }
-    // 腿 - 跑步动画（前后摆动）
+    ctx.restore();
+    // 腿 - 参考图片：前后交替摆动，膝关节弯曲明显
     this.drawLegs(ctx,ox,by,bodyLen,h);
-    // 手臂 - 跑步动画
+    // 手臂 - 参考图片：对侧交替摆动
     this.drawArms(ctx,ox,by,bodyLen);
   }
   drawLegs(ctx,ox,oy,bodyLen,h){
     const hipY=oy+bodyLen*0.7;
     const upperLen=bodyLen*0.9,lowerLen=bodyLen*0.8;
-    let lThighAngle=0.12,rThighAngle=0.12;
-    let lKneeAngle=0.15,rKneeAngle=0.15;
+    let lThighAngle=0.15,rThighAngle=0.15;
+    let lKneeAngle=0.25,rKneeAngle=0.25;
     if(this.animState==='walk'){
-      // 跑步：双腿前后交替摆动（像走正步，不是侧八字）
-      const swing=Math.sin(this.walkCycle)*0.4;
-      lThighAngle=0.12+swing;rThighAngle=0.12-swing;
-      lKneeAngle=0.15+Math.abs(swing)*0.35;rKneeAngle=0.15+Math.abs(swing)*0.35;
+      // 参考图片：双腿前后交替摆动，幅度加大，膝关节弯曲明显
+      const swing=Math.sin(this.walkCycle)*0.55;
+      lThighAngle=0.15+swing;rThighAngle=0.15-swing;
+      lKneeAngle=0.25+Math.abs(swing)*0.5;rKneeAngle=0.25+Math.abs(swing)*0.5;
     }else if(this.animState==='jump'){
-      lThighAngle=-0.08;rThighAngle=0.25;lKneeAngle=0.4;rKneeAngle=0.25;
+      lThighAngle=-0.1;rThighAngle=0.3;lKneeAngle=0.5;rKneeAngle=0.3;
     }else if(this.animState==='attack'){
-      lThighAngle=0.18;rThighAngle=0.08;lKneeAngle=0.08;rKneeAngle=0.08;
+      lThighAngle=0.22;rThighAngle=0.1;lKneeAngle=0.1;rKneeAngle=0.1;
     }else if(this.animState==='skill'){
-      lThighAngle=0.22;rThighAngle=0.04;lKneeAngle=0.2;rKneeAngle=0.04;
+      lThighAngle=0.28;rThighAngle=0.05;lKneeAngle=0.25;rKneeAngle=0.05;
     }
+    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
     const lKneeX=ox+Math.sin(lThighAngle)*upperLen;
     const lKneeY=hipY+Math.cos(lThighAngle)*upperLen;
     const lFootX=lKneeX+Math.sin(lThighAngle+lKneeAngle)*lowerLen;
     const lFootY=lKneeY+Math.cos(lThighAngle+lKneeAngle)*lowerLen;
     ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(lKneeX,lKneeY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(lKneeX,lKneeY);ctx.lineTo(lFootX,lFootY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKneeX,lKneeY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKneeX,lKneeY,3.5,0,Math.PI*2);ctx.fill();
     const rKneeX=ox-Math.sin(rThighAngle)*upperLen;
     const rKneeY=hipY+Math.cos(rThighAngle)*upperLen;
     const rFootX=rKneeX-Math.sin(rThighAngle+rKneeAngle)*lowerLen;
     const rFootY=rKneeY+Math.cos(rThighAngle+rKneeAngle)*lowerLen;
     ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(rKneeX,rKneeY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(rKneeX,rKneeY);ctx.lineTo(rFootX,rFootY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKneeX,rKneeY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKneeX,rKneeY,3.5,0,Math.PI*2);ctx.fill();
   }
   drawArms(ctx,ox,oy,bodyLen){
     const shoulderY=oy-bodyLen*0.1;
     const upperLen=bodyLen*0.55,foreLen=bodyLen*0.55;
-    let fUpAngle=0.3,fElbow=0.25,bUpAngle=0.3,bElbow=0.25;
+    let fUpAngle=0.35,fElbow=0.3,bUpAngle=0.35,bElbow=0.3;
     if(this.animState==='walk'){
-      const swing=Math.sin(this.walkCycle)*0.25;
-      fUpAngle=0.3+swing;bUpAngle=0.3-swing;
-      fElbow=0.15+Math.abs(swing)*0.4;bElbow=0.15+Math.abs(swing)*0.4;
-    }else if(this.animState==='jump'){fUpAngle=0.5;bUpAngle=0.5;fElbow=0.35;bElbow=0.35;}
+      // 参考图片：对侧协调摆动 - 左腿前摆时右臂前摆，幅度加大
+      const swing=Math.sin(this.walkCycle)*0.35;
+      fUpAngle=0.35+swing;bUpAngle=0.35-swing;
+      fElbow=0.2+Math.abs(swing)*0.5;bElbow=0.2+Math.abs(swing)*0.5;
+    }else if(this.animState==='jump'){fUpAngle=0.55;bUpAngle=0.55;fElbow=0.4;bElbow=0.4;}
     else if(this.animState==='attack'){
-      if(this.attackPhase<1){fUpAngle=0.55;bUpAngle=-0.35;fElbow=0.45;bElbow=0.15;}
+      if(this.attackPhase<1){fUpAngle=0.6;bUpAngle=-0.4;fElbow=0.5;bElbow=0.15;}
       else if(this.attackPhase<2){fUpAngle=1.5;bUpAngle=-0.15;fElbow=0.15;bElbow=0.08;}
-      else{fUpAngle=0.3;bUpAngle=0.3;fElbow=0.25;bElbow=0.25;}
+      else{fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;}
     }else if(this.animState==='skill'){
-      if(this.skillPhase<1){fUpAngle=0.7;bUpAngle=-0.7;fElbow=0.5;bElbow=0.35;}
+      if(this.skillPhase<1){fUpAngle=0.75;bUpAngle=-0.75;fElbow=0.55;bElbow=0.4;}
       else if(this.skillPhase<2){fUpAngle=1.8;bUpAngle=-0.25;fElbow=0.1;bElbow=0.08;}
-      else{fUpAngle=0.3;bUpAngle=0.3;fElbow=0.25;bElbow=0.25;}
+      else{fUpAngle=0.35;bUpAngle=0.35;fElbow=0.3;bElbow=0.3;}
     }
+    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
     const fElbowX=ox+Math.cos(Math.PI*fUpAngle)*upperLen;
     const fElbowY=shoulderY-Math.sin(Math.PI*fUpAngle)*upperLen;
     const fHandX=fElbowX+Math.cos(Math.PI*(fUpAngle-fElbow))*foreLen;
     const fHandY=fElbowY-Math.sin(Math.PI*(fUpAngle-fElbow))*foreLen;
     ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(fElbowX,fElbowY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(fElbowX,fElbowY);ctx.lineTo(fHandX,fHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fElbowX,fElbowY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fElbowX,fElbowY,3.5,0,Math.PI*2);ctx.fill();
     // 手镯装备显示
     const bracelet=DB.getEquipByCategory('bracelet');
     if(bracelet){ctx.strokeStyle=bracelet.regen>=8?'#ffcc00':bracelet.regen>=5?'#ffaa00':bracelet.regen>=3?'#ff8800':'#ff6600';ctx.lineWidth=3;ctx.beginPath();ctx.arc(fHandX,fHandY,6,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#222';}
@@ -479,7 +492,7 @@ class Player{
     const bHandY=bElbowY-Math.sin(Math.PI*(bUpAngle-bElbow))*foreLen;
     ctx.beginPath();ctx.moveTo(ox,shoulderY);ctx.lineTo(bElbowX,bElbowY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(bElbowX,bElbowY);ctx.lineTo(bHandX,bHandY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bElbowX,bElbowY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bElbowX,bElbowY,3.5,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHandX,bHandY,4,0,Math.PI*2);ctx.fill();
     const weaponActive=this.animState==='attack'||this.animState==='skill';
     const phase=weaponActive?(this.animState==='skill'?this.skillPhase:this.attackPhase):0;
@@ -497,7 +510,7 @@ class Player{
     else{ctx.strokeStyle='#aaa';ctx.lineWidth=wWid;}
     ctx.beginPath();ctx.moveTo(midX,midY);ctx.lineTo(tipX,tipY);ctx.stroke();
     if(active&&phase>0.3){ctx.fillStyle='rgba(255,200,100,0.6)';ctx.beginPath();ctx.arc(tipX,tipY,active?7:4,0,Math.PI*2);ctx.fill();}
-    ctx.strokeStyle='#222';ctx.lineWidth=4;
+    ctx.strokeStyle='#222';ctx.lineWidth=5;
   }
   drawHealthBar(ctx,camX){
     const sx=this.x-camX,sy=this.y-this.height/2-25;const bw=50,bh=6;
@@ -508,7 +521,7 @@ class Player{
   }
 }
 
-// ==================== 敌人类（变大:36x70） ====================
+// ==================== 敌人类（36x70，参考图片动画关节） ====================
 class Enemy{
   constructor(type,x,y,groundY,idx,chapterId){
     const cfg=CFG.ENEMIES[type];this.cfg=cfg;this.type=type;this.name=cfg.name;
@@ -520,13 +533,13 @@ class Enemy{
     this.atkCd=cfg.atkCd;this.dodge=cfg.dodge;
     this.jumpChance=cfg.jumpChance||0.15;this.goldReward=cfg.gold||10;
     this.width=36;this.height=70;this.facingRight=false;this.vx=0;this.vy=0;
-    this.state='idle';this.stateTimer=rand(0.3,1.5);this.atkTimer=0;
+    this.state='patrol';this.stateTimer=rand(0.2,0.6);this.atkTimer=0; // 直接开始巡逻
     this.hitFlash=0;this.hitStunTimer=0;this.dead=false;this.deathTimer=0;this.fullyRemoved=false;
     this.attacking=false;this.attackPhase=0;this.grounded=true;
     this.patrolDir=rand(0,1)<0.5?-1:1;this.patrolBase=this.x;
     this.animTimer=rand(0,10);this.walkCycle=0;this.idx=idx||0;this.breathCycle=rand(0,6);
     this.jumpCooldown=0;this.flankDir=rand(0,1)<0.5?-1:1;
-    this.aggressiveTimer=rand(0,2); // AI更积极
+    this.aggressiveTimer=rand(0,1);
     const colors=CFG.CHAPTER_COLORS[(chapterId||1)-1]||CFG.CHAPTER_COLORS[0];
     this.headColor=colors[this.idx%3];
   }
@@ -542,7 +555,6 @@ class Enemy{
     this.facingRight=player.x>this.x;
     const playerJumping=!player.grounded;
     const playerClose=d<70;
-    // 如果玩家被多个敌人围住，尝试从不同方向进攻
     let flankOffset=this.flankDir*50;
     if(this.aggressiveTimer<=0&&d<this.sight){
       this.aggressiveTimer=rand(1,3);
@@ -554,10 +566,10 @@ class Enemy{
         this.stateTimer-=dt;if(this.stateTimer<=0){this.state='patrol';this.stateTimer=rand(0.8,2.5);this.patrolDir=rand(0,1)<0.5?-1:1;}
         if(d<this.sight)this.state='chase';break;
       case 'patrol':
-        this.vx=this.spd*this.patrolDir*0.5;this.walkCycle+=dt*5;
+        this.vx=this.spd*this.patrolDir*0.6;this.walkCycle+=dt*5;
         this.stateTimer-=dt;if(this.stateTimer<=0){this.state='idle';this.stateTimer=rand(0.5,2);}
         if(d<this.sight)this.state='chase';
-        if(Math.abs(this.x-this.patrolBase)>100)this.patrolDir*=-1;break;
+        if(Math.abs(this.x-this.patrolBase)>200)this.patrolDir*=-1;break;
       case 'chase':
         const targetX=player.x+flankOffset;
         this.vx=clamp((targetX-this.x)*0.1,-1,1)*this.spd;
@@ -604,52 +616,59 @@ class Enemy{
     const h=this.height,bodyLen=h*0.28;
     const breathBob=this.state==='idle'?Math.sin(this.breathCycle)*1.5:0;
     const by=oy+breathBob;
-    ctx.strokeStyle='#222';ctx.lineWidth=4;ctx.lineCap='round';
+    // 身体前倾
+    const leanAngle=(this.state==='patrol'||this.state==='chase')?0.15:0.03;
+    const hipY=by+bodyLen*0.7;
+    ctx.save();ctx.translate(ox,hipY);ctx.rotate(leanAngle);ctx.translate(-ox,-hipY);
+    
+    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
     ctx.beginPath();ctx.moveTo(ox,by-bodyLen*0.3);ctx.lineTo(ox,by+bodyLen*0.7);ctx.stroke();
     ctx.fillStyle=this.headColor;ctx.beginPath();ctx.arc(ox,by-bodyLen*0.3-9,10,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ox-3,by-bodyLen*0.3-10,2,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(ox+3,by-bodyLen*0.3-10,2,0,Math.PI*2);ctx.fill();
-    const hipY=by+bodyLen*0.7;
+    ctx.restore();
+    
     const upperLen=bodyLen*0.8,lowerLen=bodyLen*0.7;
-    let lThigh=0.12,rThigh=0.12,lKnee=0.15,rKnee=0.15;
+    let lThigh=0.15,rThigh=0.15,lKnee=0.25,rKnee=0.25;
     if(this.state==='patrol'||this.state==='chase'){
-      const swing=Math.sin(this.walkCycle)*0.35;
-      lThigh=0.12+swing;rThigh=0.12-swing;
-      lKnee=0.15+Math.abs(swing)*0.35;rKnee=0.15+Math.abs(swing)*0.35;
-    }else if(this.state==='attack'){lThigh=0.18;rThigh=0.08;lKnee=0.08;rKnee=0.08;}
-    else if(this.state==='dodge'){lThigh=0.25;rThigh=0.04;lKnee=0.35;rKnee=0.08;}
-    else if(!this.grounded){lThigh=-0.08;rThigh=0.25;lKnee=0.4;rKnee=0.25;}
+      const swing=Math.sin(this.walkCycle)*0.55;
+      lThigh=0.15+swing;rThigh=0.15-swing;
+      lKnee=0.25+Math.abs(swing)*0.5;rKnee=0.25+Math.abs(swing)*0.5;
+    }else if(this.state==='attack'){lThigh=0.22;rThigh=0.1;lKnee=0.1;rKnee=0.1;}
+    else if(this.state==='dodge'){lThigh=0.3;rThigh=0.05;lKnee=0.4;rKnee=0.1;}
+    else if(!this.grounded){lThigh=-0.1;rThigh=0.3;lKnee=0.5;rKnee=0.3;}
+    ctx.strokeStyle='#222';ctx.lineWidth=5;ctx.lineCap='round';
     const lKX=ox+Math.sin(lThigh)*upperLen,lKY=hipY+Math.cos(lThigh)*upperLen;
     const lFX=lKX+Math.sin(lThigh+lKnee)*lowerLen,lFY=lKY+Math.cos(lThigh+lKnee)*lowerLen;
     ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(lKX,lKY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(lKX,lKY);ctx.lineTo(lFX,lFY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKX,lKY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lKX,lKY,3.5,0,Math.PI*2);ctx.fill();
     const rKX=ox-Math.sin(rThigh)*upperLen,rKY=hipY+Math.cos(rThigh)*upperLen;
     const rFX=rKX-Math.sin(rThigh+rKnee)*lowerLen,rFY=rKY+Math.cos(rThigh+rKnee)*lowerLen;
     ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(rKX,rKY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(rKX,rKY);ctx.lineTo(rFX,rFY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKX,rKY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(rKX,rKY,3.5,0,Math.PI*2);ctx.fill();
     const shY=by-bodyLen*0.1;
     const aUp=bodyLen*0.5,aFore=bodyLen*0.5;
-    let fUp=0.3,fEl=0.25,bUp=0.3,bEl=0.25;
+    let fUp=0.35,fEl=0.3,bUp=0.35,bEl=0.3;
     if(this.state==='patrol'||this.state==='chase'){
-      const s=Math.sin(this.walkCycle)*0.2;
-      fUp=0.3+s;bUp=0.3-s;fEl=0.15+Math.abs(s)*0.4;bEl=0.15+Math.abs(s)*0.4;
+      const s=Math.sin(this.walkCycle)*0.35;
+      fUp=0.35+s;bUp=0.35-s;fEl=0.2+Math.abs(s)*0.5;bEl=0.2+Math.abs(s)*0.5;
     }else if(this.state==='attack'){
-      if(this.attackPhase<1){fUp=0.55;bUp=-0.35;fEl=0.45;bEl=0.15;}
+      if(this.attackPhase<1){fUp=0.6;bUp=-0.4;fEl=0.5;bEl=0.15;}
       else if(this.attackPhase<2){fUp=1.5;bUp=-0.15;fEl=0.15;bEl=0.08;}
     }
     const fEX=ox+Math.cos(Math.PI*fUp)*aUp,fEY=shY-Math.sin(Math.PI*fUp)*aUp;
     const fHX=fEX+Math.cos(Math.PI*(fUp-fEl))*aFore,fHY=fEY-Math.sin(Math.PI*(fUp-fEl))*aFore;
     ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(fEX,fEY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(fEX,fEY);ctx.lineTo(fHX,fHY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fEX,fEY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fEX,fEY,3.5,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#222';ctx.beginPath();ctx.arc(fHX,fHY,4,0,Math.PI*2);ctx.fill();
     const bEX=ox-Math.cos(Math.PI*bUp)*aUp,bEY=shY-Math.sin(Math.PI*bUp)*aUp;
     const bHX=bEX-Math.cos(Math.PI*(bUp-bEl))*aFore,bHY=bEY-Math.sin(Math.PI*(bUp-bEl))*aFore;
     ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(bEX,bEY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(bEX,bEY);ctx.lineTo(bHX,bHY);ctx.stroke();
-    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bEX,bEY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bEX,bEY,3.5,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#222';ctx.beginPath();ctx.arc(bHX,bHY,4,0,Math.PI*2);ctx.fill();
     if(this.state==='attack'&&this.attackPhase>0.5){
       ctx.strokeStyle='#ff6644';ctx.lineWidth=4;
@@ -664,7 +683,7 @@ class Enemy{
   }
 }
 
-// ==================== BOSS类（变大:50x100） ====================
+// ==================== BOSS类（50x100，参考图片动画关节） ====================
 class Boss extends Enemy{
   constructor(type,x,y,groundY,cfgOverride,chapterId){
     super('sword',x,y,groundY,0,chapterId);
@@ -712,32 +731,54 @@ class Boss extends Enemy{
   }
   drawBossStickman(ctx,ox,oy){
     const h=this.height,bodyLen=h*0.28;
+    const leanAngle=this.stunned?0:0.12;
+    const hipY=oy+bodyLen*0.7;
+    ctx.save();ctx.translate(ox,hipY);ctx.rotate(leanAngle);ctx.translate(-ox,-hipY);
+    
     ctx.strokeStyle='#111';ctx.lineWidth=6;ctx.lineCap='round';
     ctx.beginPath();ctx.moveTo(ox,oy-bodyLen*0.3);ctx.lineTo(ox,oy+bodyLen*0.7);ctx.stroke();
-    ctx.strokeStyle=this.armorHitFlash>0?'#88aaff':'#555';ctx.lineWidth=3;ctx.strokeRect(ox-15,oy-bodyLen*0.2-2,30,bodyLen*1.1);
+    // 只在非死亡时画护甲框（修复边框问题）
+    if(!this.dead&&this.armorMax>0){
+      ctx.strokeStyle=this.armorHitFlash>0?'#88aaff':'#555';ctx.lineWidth=3;
+      ctx.strokeRect(ox-15,oy-bodyLen*0.2-2,30,bodyLen*1.1);
+    }
     ctx.fillStyle='#111';ctx.beginPath();ctx.arc(ox,oy-bodyLen*0.3-14,16,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#f00';ctx.beginPath();ctx.arc(ox-5,oy-bodyLen*0.3-16,4,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(ox+5,oy-bodyLen*0.3-16,4,0,Math.PI*2);ctx.fill();
     ctx.strokeStyle='#111';ctx.lineWidth=4;
     ctx.beginPath();ctx.moveTo(ox-10,oy-bodyLen*0.3-26);ctx.lineTo(ox-18,oy-bodyLen*0.3-38);ctx.stroke();
     ctx.beginPath();ctx.moveTo(ox+10,oy-bodyLen*0.3-26);ctx.lineTo(ox+18,oy-bodyLen*0.3-38);ctx.stroke();
-    const hipY=oy+bodyLen*0.7;const upL=bodyLen*0.9,loL=bodyLen*0.8;
-    let lT=0.12,rT=0.12,lK=0.15,rK=0.15;
-    if(!this.stunned){const sw=Math.sin(this.walkCycle)*0.35;lT=0.12+sw;rT=0.12-sw;lK=0.15+Math.abs(sw)*0.3;rK=0.15+Math.abs(sw)*0.3;}
+    ctx.restore();
+    
+    const upL=bodyLen*0.9,loL=bodyLen*0.8;
+    let lT=0.15,rT=0.15,lK=0.25,rK=0.25;
+    if(!this.stunned){
+      const sw=Math.sin(this.walkCycle)*0.5;
+      lT=0.15+sw;rT=0.15-sw;lK=0.25+Math.abs(sw)*0.45;rK=0.25+Math.abs(sw)*0.45;
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=6;ctx.lineCap='round';
     const lKX=ox+Math.sin(lT)*upL,lKY=hipY+Math.cos(lT)*upL;
-    ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(lKX,lKY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(lKX,lKY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(lKX,lKY);ctx.lineTo(lKX+Math.sin(lT+lK)*loL,lKY+Math.cos(lT+lK)*loL);ctx.stroke();
     ctx.fillStyle='#111';ctx.beginPath();ctx.arc(lKX,lKY,4,0,Math.PI*2);ctx.fill();
     const rKX=ox-Math.sin(rT)*upL,rKY=hipY+Math.cos(rT)*upL;
     ctx.beginPath();ctx.moveTo(ox,hipY);ctx.lineTo(rKX,rKY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(rKX,rKY);ctx.lineTo(rKX-Math.sin(rT+rK)*loL,rKY+Math.cos(rT+rK)*loL);ctx.stroke();
     ctx.fillStyle='#111';ctx.beginPath();ctx.arc(rKX,rKY,4,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#111';ctx.lineWidth=4;
+    ctx.strokeStyle='#111';ctx.lineWidth=5;
     const shY=oy-bodyLen*0.1;const aLen=bodyLen*0.95;
-    let armA=0.3;
-    if(this.attacking){if(this.attackPhase<1)armA=0.55;else if(this.attackPhase<2)armA=1.7;else armA=0.3;}
-    ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen,shY-Math.sin(Math.PI*armA)*aLen);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox-Math.cos(Math.PI*0.3)*aLen,shY-Math.sin(Math.PI*0.3)*aLen);ctx.stroke();
+    let armA=0.35;
+    // 双臂交替摆动
+    if(!this.stunned){
+      const armSwing=Math.sin(this.walkCycle)*0.3;
+      const armA2=0.35-armSwing;
+      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen,shY-Math.sin(Math.PI*armA)*aLen);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox-Math.cos(Math.PI*armA2)*aLen,shY-Math.sin(Math.PI*armA2)*aLen);ctx.stroke();
+    }else{
+      if(this.attacking){if(this.attackPhase<1)armA=0.6;else if(this.attackPhase<2)armA=1.7;else armA=0.35;}
+      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen,shY-Math.sin(Math.PI*armA)*aLen);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox-Math.cos(Math.PI*0.35)*aLen,shY-Math.sin(Math.PI*0.35)*aLen);ctx.stroke();
+    }
     if(this.attacking&&this.attackPhase>0.8){
       ctx.strokeStyle='#ff4444';ctx.lineWidth=8;
       ctx.beginPath();ctx.moveTo(ox,shY);ctx.lineTo(ox+Math.cos(Math.PI*armA)*aLen*2,shY-Math.sin(Math.PI*armA)*aLen*2);ctx.stroke();
@@ -787,7 +828,7 @@ class Game{
     this.time=0;this.lastTime=0;this.shakeTimer=0;this.shakeIntensity=0;
     this.bgRenderer=new BackgroundRenderer(this.sceneCfg);
     this.activeTouches={};this.touchButtonMap={};
-    this.transitionTimer=0;this.killedGold=0;
+    this.transitionTimer=0;this.killedGold=0;this.hasEnemies=false;
     this.joystickTouchId=null;this.keyStates={};
     this.pauseBtnArea={x:25,y:25,w:36,h:36};
     this.initScene();this.setupInput();this.running=true;
@@ -807,10 +848,12 @@ class Game{
   initScene(){
     this.enemies=[];this.boss=null;this.sceneClear=false;this.transitionTimer=0;this.killedGold=0;this.drops=[];
     const cfg=this.sceneCfg;this.bgRenderer=new BackgroundRenderer(cfg);
-    const spawnArea=this.worldW*0.4;
+    // 敌人出生点更靠近玩家（修复第一关AI不动的问题）
+    const spawnStart=this.worldW*0.15;
+    const spawnEnd=this.worldW*0.55;
     if(cfg.boss){
       const extraScale=this.chapterId>=5?1.5:1;
-      this.boss=new Boss('sword',spawnArea+rand(0,200),this.groundY-50,this.groundY,{
+      this.boss=new Boss('sword',spawnStart+rand(100,300),this.groundY-50,this.groundY,{
         hp:Math.floor(CFG.BOSS_CFG.hp*getChapterScale(this.chapterId)*extraScale),
         armor:Math.floor(CFG.BOSS_CFG.armor*getChapterScale(this.chapterId)*extraScale),
         atk:Math.floor(CFG.BOSS_CFG.atk*getChapterScale(this.chapterId)),
@@ -820,13 +863,15 @@ class Game{
         bossName:cfg.bossName||'BOSS',finalBoss:cfg.finalBoss||false
       },this.chapterId);
     }
-    // 生成小敌人（BOSS关也有）
-    let idx=0;
+    let idx=0;this.hasEnemies=false;
     for(const group of cfg.enemies){
       for(let i=0;i<group.count;i++){
-        this.enemies.push(new Enemy(group.type,spawnArea+rand(i*120,i*120+100),this.groundY-35,this.groundY,idx++,this.chapterId));
+        const ex=spawnStart+rand(i*100,i*100+120)+(spawnEnd-spawnStart)*rand(0,0.8);
+        this.enemies.push(new Enemy(group.type,ex,this.groundY-35,this.groundY,idx++,this.chapterId));
+        this.hasEnemies=true;
       }
     }
+    if(cfg.boss)this.hasEnemies=true;
     this.player.x=100;this.player.y=this.groundY-40;this.player.vx=0;this.player.vy=0;this.player.grounded=true;
     this.camX=0;this.player.weapon=DB.data.weapon;
   }
@@ -918,7 +963,6 @@ class Game{
   checkPauseBtn(gx,gy){return gx>=this.pauseBtnArea.x&&gx<=this.pauseBtnArea.x+this.pauseBtnArea.w&&gy>=this.pauseBtnArea.y&&gy<=this.pauseBtnArea.y+this.pauseBtnArea.h;}
   togglePause(){this.paused=!this.paused;}
   handlePauseClick(gx,gy){
-    // 暂停菜单：继续 / 返回主界面
     if(gx>this.gameW*0.25&&gx<this.gameW*0.75){
       if(gy>this.gameH*0.4&&gy<this.gameH*0.52)this.paused=false;
       if(gy>this.gameH*0.55&&gy<this.gameH*0.67)this.goToMenu();
@@ -949,7 +993,6 @@ class Game{
     this.spawnDeathParticles(enemy.x,enemy.y);
     this.killedGold+=enemy.goldReward;
     this.floatingTexts.push(new FloatingText(enemy.x,enemy.y-20,'+'+enemy.goldReward+'💰','#ffcc00'));
-    // 随机掉落装备
     this.tryDropItem(enemy);
   }
   tryDropItem(enemy){
@@ -959,8 +1002,7 @@ class Game{
       const categories=['armor','bracelet','shoes'];
       const cat=categories[randInt(0,2)];
       const items=EQUIP[cat];
-      // 根据章节决定掉落稀有度
-      let maxIdx=Math.min(1,items.length-1); // 默认只有第一级
+      let maxIdx=Math.min(1,items.length-1);
       if(this.chapterId>=3)maxIdx=Math.min(2,items.length-1);
       if(this.chapterId>=5||isBoss)maxIdx=items.length-1;
       const itemIdx=randInt(0,maxIdx);
@@ -976,7 +1018,8 @@ class Game{
     if(this.sceneClear)return;
     const allDead=this.enemies.every(e=>e.dead);
     const bossDead=!this.boss||this.boss.dead;
-    if(allDead&&bossDead&&(this.enemies.length>0||this.boss)){this.sceneClear=true;this.onSceneVictory();}
+    // 修复：只要场景中有敌人且全部死亡就触发通关
+    if(allDead&&bossDead&&this.hasEnemies){this.sceneClear=true;this.onSceneVictory();}
   }
   onSceneVictory(){
     if(this.killedGold>0){DB.addGold(this.killedGold);}
@@ -1008,8 +1051,8 @@ class Game{
     const targetCamX=this.player.x-this.gameW/2;
     this.camX=lerp(this.camX,targetCamX,0.08);
     this.camX=clamp(this.camX,0,this.worldW-this.gameW);
-    for(const enemy of this.enemies){if(!enemy.dead||!enemy.fullyRemoved)enemy.update(dt,this.player,playerAttacking,this.enemies);}
-    if(this.boss&&(!this.boss.dead||!this.boss.fullyRemoved))this.boss.update(dt,this.player,playerAttacking,this.enemies);
+    for(const enemy of this.enemies){if(!enemy.fullyRemoved)enemy.update(dt,this.player,playerAttacking,this.enemies);}
+    if(this.boss&&!this.boss.fullyRemoved)this.boss.update(dt,this.player,playerAttacking,this.enemies);
     for(const p of this.particles)p.update(dt);this.particles=this.particles.filter(p=>!p.dead);
     for(const t of this.floatingTexts)t.update(dt);this.floatingTexts=this.floatingTexts.filter(t=>!t.dead);
     for(const d of this.drops){if(!d.dead)d.update(dt,this.player);}this.drops=this.drops.filter(d=>!d.dead);
@@ -1060,7 +1103,6 @@ class Game{
     ctx.restore();
     this.joystick.draw(ctx);this.drawButtons(ctx);this.drawPlayerHUD(ctx);this.drawWeaponInfo(ctx);
     this.drawGoldHUD(ctx);
-    // 暂停按钮
     this.drawPauseBtn(ctx);
     if(this.sceneClear&&!this.sceneCfg.boss){
       ctx.fillStyle='rgba(255,204,0,0.8)';ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText('敌人已清除!',w/2,h/2-60);ctx.textAlign='start';
@@ -1071,7 +1113,6 @@ class Game{
     if(this.paused){
       ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,w,h);
       ctx.fillStyle='#ffcc00';ctx.font='bold 28px sans-serif';ctx.textAlign='center';ctx.fillText('游戏暂停',w/2,h/2-60);
-      ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='16px sans-serif';
       ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.4,w*0.5,60);ctx.fillStyle='#222';ctx.fillText('继续游戏',w/2,h*0.4+38);
       ctx.fillStyle='#fff';ctx.fillRect(w*0.25,h*0.55,w*0.5,60);ctx.fillStyle='#222';ctx.fillText('返回主界面',w/2,h*0.55+38);
       ctx.textAlign='start';
@@ -1133,14 +1174,7 @@ function updateMenuDisplay(){
   document.getElementById('menuWeapon').textContent=CFG.WEAPONS[DB.data.weapon]?.name||'剑';
   document.getElementById('menuMaxChapter').textContent=DB.data.maxChapter;
   document.getElementById('menuSubInfo').textContent='小关 '+DB.data.subLevel+'/5';
-  // 装备面板
   updateEquipPanel();
-  // 武器选择
-  const wg=document.getElementById('weaponGrid');
-  if(wg){wg.innerHTML='';for(const k in CFG.WEAPONS){const wcfg=CFG.WEAPONS[k];const locked=!DB.data.unlockedWeapons||!DB.data.unlockedWeapons[k];const div=document.createElement('div');div.className='weapon-btn'+(DB.data.weapon===k?' selected':'')+(locked?' locked':'');div.textContent=wcfg.name;div.setAttribute('data-weapon',k);if(!locked){div.onclick=()=>{DB.data.weapon=k;DB.save();updateMenuDisplay();};}wg.appendChild(div);}}
-  // 武器技能
-  const wsg=document.getElementById('weaponSkillGrid');
-  if(wsg){wsg.innerHTML='';for(const k in CFG.WEAPONS){const wcfg=CFG.WEAPONS[k];const hasSkill=DB.data.weaponSkills&&DB.data.weaponSkills[k];const div=document.createElement('div');div.className='weapon-btn'+(hasSkill?' selected':'');div.innerHTML=wcfg.name+'<br><span style="font-size:9px">'+(hasSkill?'已学✓':'💰'+wcfg.skillCost)+'</span>';if(!hasSkill){div.onclick=()=>{if(!DB.spendGold(wcfg.skillCost)){alert('金币不足!');return;}DB.data.weaponSkills=DB.data.weaponSkills||{};DB.data.weaponSkills[k]=true;DB.save();updateMenuDisplay();};}wsg.appendChild(div);}}
   // 章节选择
   const sg=document.getElementById('sceneGrid');
   if(sg){sg.innerHTML='';for(let i=0;i<CFG.CHAPTERS.length;i++){const ch=CFG.CHAPTERS[i];const locked=i>=DB.data.maxChapter;const div=document.createElement('div');div.className='scene-btn'+(DB.data.chapter===i+1?' selected':'')+(locked?' locked':'');div.innerHTML='<span class="sc-num">'+(i+1)+'</span><span class="sc-name">'+ch.name+'</span>';if(!locked){div.onclick=()=>{DB.data.chapter=i+1;DB.data.subLevel=1;DB.save();updateMenuDisplay();};}sg.appendChild(div);}}
@@ -1170,11 +1204,32 @@ function openEquipSelect(category){
   const overlay=document.getElementById('equipSelectOverlay');
   const title=document.getElementById('equipSelectTitle');
   const list=document.getElementById('equipSelectList');
-  const catNames={armor:'护甲',bracelet:'手镯',shoes:'鞋子'};
+  const catNames={weapon:'武器',armor:'护甲',bracelet:'手镯',shoes:'鞋子'};
   title.textContent='选择'+catNames[category];
+  list.innerHTML='';
+  
+  // 武器特殊处理（从CFG.WEAPONS获取）
+  if(category==='weapon'){
+    const currentWeapon=DB.data.weapon;
+    for(const k in CFG.WEAPONS){
+      const wcfg=CFG.WEAPONS[k];
+      const unlocked=DB.data.unlockedWeapons&&DB.data.unlockedWeapons[k];
+      const div=document.createElement('div');
+      div.className='equip-select-item'+(currentWeapon===k?' equipped':'')+(unlocked?'':' locked');
+      div.style.opacity=unlocked?'1':'0.4';
+      div.innerHTML='<span>'+(unlocked?'':'🔒 ')+wcfg.name+'</span><span class="item-stats">攻击x'+wcfg.atkMul+' 范围'+wcfg.range+'</span>';
+      if(unlocked){
+        div.onclick=()=>{DB.equipItem('weapon',k);DB.save();updateMenuDisplay();closeEquipSelect();};
+      }
+      list.appendChild(div);
+    }
+    overlay.classList.remove('hidden');
+    return;
+  }
+  
+  // 其他装备
   const items=EQUIP[category];
   const equippedId=DB.getEquipped(category);
-  list.innerHTML='';
   // 卸下选项
   const unequipDiv=document.createElement('div');
   unequipDiv.className='equip-select-item';
