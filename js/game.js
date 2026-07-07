@@ -17,17 +17,20 @@ const NinjaSprite={
     if(this._loading)return this._loadPromise;
     this._loading=true;
     const map={
-      playerIdle:'assets/sprites/player_idle.jpg',
-      playerRun:'assets/sprites/player_run_1.jpg',
-      playerJump:'assets/sprites/player_jump.jpg',
-      playerAtkSword:'assets/sprites/player_atk_sword.jpg',
+      playerIdle:'assets/sprites/player_idle_1.jpg',
+      playerRun:'assets/sprites/player_run.jpg',
+      playerJump:'assets/sprites/player_jump_1.jpg',
+      playerAtkSword:'assets/sprites/player_atk_sword_1.jpg',
       playerAtkKnife:'assets/sprites/player_atk_knife.jpg',
       playerAtkStaff:'assets/sprites/player_atk_staff.jpg',
       playerAtkSpear:'assets/sprites/player_atk_spear.jpg',
-      playerSkill:'assets/sprites/player_skill.jpg',
-      enemyIdle:'assets/sprites/enemy_idle.jpg',
-      enemyRun:'assets/sprites/enemy_run.jpg',
+      playerSkill:'assets/sprites/player_skill_1.jpg',
+      enemyIdle:'assets/sprites/enemy_idle_1.jpg',
+      enemyRun:'assets/sprites/enemy_run_1.jpg',
+      enemyAttack:'assets/sprites/enemy_attack.jpg',
       bossIdle:'assets/sprites/boss_idle.jpg',
+      bossRun:'assets/sprites/boss_run.jpg',
+      bossSkill:'assets/sprites/boss_skill.jpg',
     };
     const total=Object.keys(map).length;
     let loaded=0;
@@ -52,31 +55,36 @@ const NinjaSprite={
       tmp.width=img.naturalWidth;tmp.height=img.naturalHeight;
       const tctx=tmp.getContext('2d');
       tctx.drawImage(img,0,0);
-      const data=tctx.getImageData(0,0,tmp.width,tmp.height);
-      const px=data.data;
-      let minX=tmp.width,maxX=0,minY=tmp.height,maxY=0;
-      for(let y=0;y<tmp.height;y++){
-        for(let x=0;x<tmp.width;x++){
-          const i=(y*tmp.width+x)*4;
-          const r=px[i],g=px[i+1],b=px[i+2];
-          // 接近白色的像素设为透明
-          if(r>230&&g>230&&b>230){px[i+3]=0;}
-          else if(r>200&&g>200&&b>200){px[i+3]=Math.floor(255*((r-200)/30)*((g-200)/30)*((b-200)/30));}
-          if(px[i+3]>20){
-            if(x<minX)minX=x;if(x>maxX)maxX=x;
-            if(y<minY)minY=y;if(y>maxY)maxY=y;
+      try{
+        const data=tctx.getImageData(0,0,tmp.width,tmp.height);
+        const px=data.data;
+        let minX=tmp.width,maxX=0,minY=tmp.height,maxY=0;
+        for(let y=0;y<tmp.height;y++){
+          for(let x=0;x<tmp.width;x++){
+            const i=(y*tmp.width+x)*4;
+            const r=px[i],g=px[i+1],b=px[i+2];
+            // 接近白色的像素设为透明
+            if(r>230&&g>230&&b>230){px[i+3]=0;}
+            else if(r>200&&g>200&&b>200){px[i+3]=Math.floor(255*Math.min(1,((r-200)/30))*Math.min(1,((g-200)/30))*Math.min(1,((b-200)/30)));}
+            if(px[i+3]>20){
+              if(x<minX)minX=x;if(x>maxX)maxX=x;
+              if(y<minY)minY=y;if(y>maxY)maxY=y;
+            }
           }
         }
-      }
-      tctx.putImageData(data,0,0);
-      // 裁剪到内容区域
-      const cw=maxX-minX+1,ch=maxY-minY+1;
-      if(cw>10&&ch>10){
-        const cropped=document.createElement('canvas');
-        cropped.width=cw;cropped.height=ch;
-        cropped.getContext('2d').drawImage(tmp,minX,minY,cw,ch,0,0,cw,ch);
-        this._processed[key]=cropped;
-      }else{
+        tctx.putImageData(data,0,0);
+        // 裁剪到内容区域
+        const cw=maxX-minX+1,ch=maxY-minY+1;
+        if(cw>10&&ch>10){
+          const cropped=document.createElement('canvas');
+          cropped.width=cw;cropped.height=ch;
+          cropped.getContext('2d').drawImage(tmp,minX,minY,cw,ch,0,0,cw,ch);
+          this._processed[key]=cropped;
+        }else{
+          this._processed[key]=tmp;
+        }
+      }catch(e2){
+        // Tainted Canvas - 使用原始图片
         this._processed[key]=tmp;
       }
     }catch(e){
@@ -183,11 +191,11 @@ const ANIM={
   playerSkill(w,h){return NinjaSprite.getFrames('playerSkill',w,h,8,'skill');},
   enemyIdle(w,h){return NinjaSprite.getFrames('enemyIdle',w,h,8,'idle');},
   enemyRun(w,h){return NinjaSprite.getFrames('enemyRun',w,h,8,'run');},
-  enemyAttack(w,h){return NinjaSprite.getFrames('enemyIdle',w,h,6,'attack');},
+  enemyAttack(w,h){return NinjaSprite.getFrames('enemyAttack',w,h,6,'attack');},
   bossIdle(w,h){return NinjaSprite.getFrames('bossIdle',w,h,8,'idle');},
-  bossRun(w,h){return NinjaSprite.getFrames('bossIdle',w,h,8,'run');},
+  bossRun(w,h){return NinjaSprite.getFrames('bossRun',w,h,8,'run');},
   bossAttack(w,h){return NinjaSprite.getFrames('bossIdle',w,h,6,'attack');},
-  bossSkill(w,h){return NinjaSprite.getFrames('bossIdle',w,h,8,'skill');},
+  bossSkill(w,h){return NinjaSprite.getFrames('bossSkill',w,h,8,'skill');},
 };
 
 // ==================== 配置 ====================
@@ -515,7 +523,8 @@ class Enemy{
   draw(ctx,camX){
     if(this.fullyRemoved)return;
     let frames;
-    if(this.attacking)frames=ANIM.enemyAttack(this.w,this.h);
+    if(this.dead)frames=ANIM.enemyIdle(this.w,this.h);
+    else if(this.attacking)frames=ANIM.enemyAttack(this.w,this.h);
     else if(this.state==='patrol'||this.state==='chase'||this.state==='dodge')frames=ANIM.enemyRun(this.w,this.h);
     else frames=ANIM.enemyIdle(this.w,this.h);
     const idx=Math.floor(this.frameIdx)%frames.length;
@@ -694,9 +703,9 @@ class Game{
     this.activeTouches={};this.touchButtonMap={};this.transitionTimer=0;this.killedGold=0;this.hasEnemies=false;
     this.joystickTouchId=null;this.keyStates={};this.victoryTimer=0;this.victoryAutoReturn=false;
     this.pauseBtn={x:25,y:25,w:36,h:36};
-    this._bound={};
+    this._bound={};this._rafId=null;
     this.initScene();this.setupInput();this.running=true;
-    this.lastTime=performance.now();requestAnimationFrame(t=>this.gameLoop(t));
+    this.lastTime=performance.now();this._rafId=requestAnimationFrame(t=>this.gameLoop(t));
   }
   
   resize(){
@@ -737,6 +746,9 @@ class Game{
     }
     if(this.sceneCfg.boss)this.hasEnemies=true;
     this.player.x=100;this.player.y=this.groundY-40;this.player.vx=0;this.player.vy=0;this.player.grounded=true;
+    this.player.attacking=false;this.player.skilling=false;this.player.state='idle';
+    this.player.atkTimer=0;this.player.skillTimer=0;this.player.frameIdx=0;
+    this.player.invulnTimer=0;this.player.hitFlash=0;
     this.camX=0;this.player.weapon=DB.data.weapon;
   }
   
@@ -823,9 +835,9 @@ class Game{
   }
   
   gameLoop(timestamp){
-    if(!this.running)return;
+    if(!this.running||this._rafId===null)return;
     try{const dt=Math.min(0.05,(timestamp-this.lastTime)/1000);this.lastTime=timestamp;this.time+=dt;if(this.state==='playing'&&!this.paused)this.update(dt);this.render();}catch(e){console.error('loop',e&&e.message?e.message:e);}
-    requestAnimationFrame(t=>this.gameLoop(t));
+    if(this._rafId!==null)this._rafId=requestAnimationFrame(t=>this.gameLoop(t));
   }
   
   update(dt){
@@ -862,10 +874,20 @@ class Game{
   
   doNextSubLevel(){
     this.subLevelIdx++;
-    if(this.subLevelIdx>=this.chapterCfg.subLevels.length){this.state='victory';this.victoryScene=true;this.victoryTimer=0;this.victoryAutoReturn=true;if(this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}DB.save();return;}
+    if(this.subLevelIdx>=this.chapterCfg.subLevels.length){
+      this.state='victory';this.victoryScene=true;this.victoryTimer=0;this.victoryAutoReturn=true;
+      if(this.chapterId+1>DB.data.maxChapter){DB.data.maxChapter=this.chapterId+1;DB.data.maxSubLevel=1;}
+      DB.save();return;
+    }
     this.sceneCfg=this.chapterCfg.subLevels[this.subLevelIdx];this.worldW=this.sceneCfg.width;
     DB.data.subLevel=this.subLevelIdx+1;if(this.subLevelIdx+1>DB.data.maxSubLevel&&this.chapterId===DB.data.chapter)DB.data.maxSubLevel=this.subLevelIdx+1;DB.save();
-    const currentHp=this.player.hp;this.initScene();this.player.hp=currentHp;this.player.x=100;this.player.y=this.groundY-40;
+    const currentHp=this.player.hp;
+    // 确保场景宽度有效
+    if(!this.worldW||this.worldW<500)this.worldW=2000;
+    this.initScene();
+    this.player.hp=currentHp>0?currentHp:this.player.maxHp;
+    this.player.x=100;this.player.y=this.groundY-40;
+    this.state='playing';this.sceneClear=false;this.transitionTimer=0;
   }
   
   render(){
@@ -919,6 +941,7 @@ class Game{
   handleClick(gx,gy){this.goToMenu();}
   
   goToMenu(){
+    if(this._rafId!==null){cancelAnimationFrame(this._rafId);this._rafId=null;}
     this.running=false;this.cleanupInput();
     this.particles=[];this.floatingTexts=[];this.drops=[];this.enemies=[];this.boss=null;
     document.getElementById('gameScreen').classList.add('hidden');
@@ -985,7 +1008,10 @@ function startGame(){
   try{
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('gameScreen').classList.remove('hidden');
-    if(_game){_game.running=false;_game.cleanupInput();}
+    if(_game){
+      if(_game._rafId!==null){cancelAnimationFrame(_game._rafId);_game._rafId=null;}
+      _game.running=false;_game.cleanupInput();
+    }
     _game=new Game(DB.data.chapter,DB.data.subLevel);
   }catch(e){console.error('startGame error:',e&&e.message?e.message:e);}
 }
