@@ -45,7 +45,7 @@ const Sprite={
     return this._loadPromise;
   },
   
-  // 自动检测并去除背景色
+  // 从边缘泛洪填充去掉背景，保留中心人物
   _removeBg(key,img){
     try{
       const w=img.naturalWidth,h=img.naturalHeight;
@@ -54,27 +54,59 @@ const Sprite={
       try{
         const data=ctx.getImageData(0,0,w,h);
         const px=data.data;
-        // 采样四个角+四个边中点，取平均作为背景色
-        let bgR=0,bgG=0,bgB=0,samples=0;
-        const samplePts=[
-          [0,0],[w-1,0],[0,h-1],[w-1,h-1],
-          [Math.floor(w/2),0],[Math.floor(w/2),h-1],
-          [0,Math.floor(h/2)],[w-1,Math.floor(h/2)]
-        ];
-        for(const[sx,sy]of samplePts){
+        // 取四个角像素的平均值作为背景色
+        let bgR=0,bgG=0,bgB=0;
+        const corners=[[0,0],[w-1,0],[0,h-1],[w-1,h-1]];
+        for(const[sx,sy]of corners){
           const si=(sy*w+sx)*4;
-          bgR+=px[si];bgG+=px[si+1];bgB+=px[si+2];samples++;
+          bgR+=px[si];bgG+=px[si+1];bgB+=px[si+2];
         }
-        bgR=Math.round(bgR/samples);bgG=Math.round(bgG/samples);bgB=Math.round(bgB/samples);
-        // 把接近背景色的像素变透明（容差30）
-        const tol=30;
-        for(let i=0;i<px.length;i+=4){
+        bgR=Math.round(bgR/4);bgG=Math.round(bgG/4);bgB=Math.round(bgB/4);
+        // 泛洪填充：从边缘像素开始，只去掉与背景色接近且连通到边缘的像素
+        const tol=25;
+        const visited=new Uint8Array(w*h);
+        const queue=[];
+        // 初始化：四条边上的像素
+        const addEdge=(x,y)=>{
+          const idx=y*w+x;
+          if(visited[idx])return;
+          const i=idx*4;
           const dr=Math.abs(px[i]-bgR),dg=Math.abs(px[i+1]-bgG),db=Math.abs(px[i+2]-bgB);
           if(dr<tol&&dg<tol&&db<tol){
-            px[i+3]=0;
-          }else if(dr<tol*1.5&&dg<tol*1.5&&db<tol*1.5){
-            const dist=Math.max(dr,dg,db)/tol;
-            px[i+3]=Math.floor(255*(1-dist));
+            visited[idx]=1;queue.push(x,y);px[i+3]=0;
+          }else{
+            visited[idx]=2; // 标记为"人物边缘"，不处理
+          }
+        };
+        for(let x=0;x<w;x++){addEdge(x,0);addEdge(x,h-1);}
+        for(let y=1;y<h-1;y++){addEdge(0,y);addEdge(w-1,y);}
+        // BFS 泛洪
+        let head=0;
+        while(head<queue.length){
+          const cx=queue[head++],cy=queue[head++];
+          for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
+            const nx=cx+dx,ny=cy+dy;
+            if(nx<0||nx>=w||ny<0||ny>=h)continue;
+            const idx=ny*w+nx;
+            if(visited[idx])continue;
+            const i=idx*4;
+            const dr=Math.abs(px[i]-bgR),dg=Math.abs(px[i+1]-bgG),db=Math.abs(px[i+2]-bgB);
+            if(dr<tol&&dg<tol&&db<tol){
+              visited[idx]=1;queue.push(nx,ny);px[i+3]=0;
+            }
+          }
+        }
+        // 边缘羽化：对已标记为背景的像素周围做渐变
+        for(let y=1;y<h-1;y++){
+          for(let x=1;x<w-1;x++){
+            const idx=y*w+x;
+            if(visited[idx]!==2)continue; // 只处理人物边缘像素
+            const i=idx*4;
+            const dr=Math.abs(px[i]-bgR),dg=Math.abs(px[i+1]-bgG),db=Math.abs(px[i+2]-bgB);
+            if(dr<tol*1.5&&dg<tol*1.5&&db<tol*1.5){
+              const dist=Math.max(dr,dg,db)/tol;
+              px[i+3]=Math.floor(255*(1-(dist-1)/0.5));
+            }
           }
         }
         ctx.putImageData(data,0,0);
