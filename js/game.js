@@ -51,7 +51,7 @@ const Sprite={
 
 // ==================== 配置 ====================
 const CFG={
-  PLAYER:{hp:120,baseAtk:18,spd:4.0,jumpForce:12,atkCooldown:0.35,skillCooldown:5,skillDmgMul:2.5},
+  PLAYER:{hp:120,baseAtk:18,spd:4.0,jumpForce:12,atkCooldown:0.2,skillCooldown:5,skillDmgMul:2.5},
   WEAPONS:{
     sword:{name:'剑',atkMul:1.0,range:60,speed:1.0,color:'#ffdd44',anim:'playerAtkSword',wLen:26,wWid:5},
     staff:{name:'棍',atkMul:0.8,range:70,speed:1.2,color:'#ffaa44',anim:'playerAtkStaff',wLen:32,wWid:4},
@@ -201,6 +201,7 @@ class Player{
     this.atkTimer=0;this.skillTimer=0;this.invulnTimer=0;this.hitFlash=0;
     this.state='idle';this.animTimer=0;this.frameIdx=0;this.frameSpeed=8;
     this.attacking=false;this.skilling=false;
+    this.atkDuration=0;this.skillDuration=0;
     this.weapon='sword';
   }
   getWeaponCfg(){return CFG.WEAPONS[this.weapon]||CFG.WEAPONS.sword;}
@@ -220,6 +221,9 @@ class Player{
     this.vy+=25*dt;this.x+=this.vx*60*dt;this.y+=this.vy*60*dt;
     if(this.y+this.h/2>=groundY){this.y=groundY-this.h/2;this.vy=0;this.grounded=true;}else this.grounded=false;
     this.x=clamp(this.x,this.w/2,worldW-this.w/2);
+    // 攻击/技能计时器
+    if(this.attacking){this.atkDuration-=dt;if(this.atkDuration<=0){this.attacking=false;this.frameIdx=0;}}
+    if(this.skilling){this.skillDuration-=dt;if(this.skillDuration<=0){this.skilling=false;this.frameIdx=0;}}
     // 状态机
     if(this.hitFlash>0)this.state='hurt';
     else if(this.skilling)this.state='skill';
@@ -230,12 +234,22 @@ class Player{
     // 帧更新
     this.frameIdx+=dt*this.frameSpeed;
     if(this.frameIdx>=99)this.frameIdx-=99;
-    if(this.attacking&&this.frameIdx>=this.frameSpeed*6){this.attacking=false;this.frameIdx=0;}
-    if(this.skilling&&this.frameIdx>=this.frameSpeed*8){this.skilling=false;this.frameIdx=0;}
   }
   
-  attack(){if(this.atkTimer>0||this.attacking)return null;this.atkTimer=this.getWeaponCfg().speed*CFG.PLAYER.atkCooldown;this.attacking=true;this.frameIdx=0;const dir=this.facingRight?1:-1;return {x:this.x+dir*30,y:this.y-5,w:this.getAtkRange(),h:40,damage:this.getAtk(),knockback:dir*5,color:this.getWeaponCfg().color};}
-  skill(){if(this.skillTimer>0||this.skilling)return null;this.skillTimer=CFG.PLAYER.skillCooldown;this.skilling=true;this.frameIdx=0;const dir=this.facingRight?1:-1;return {x:this.x+dir*35,y:this.y-15,w:this.getAtkRange()*1.5,h:60,damage:Math.floor(this.getAtk()*this.getSkillMul()),knockback:dir*10,color:'#ff6644',isSkill:true};}
+  attack(){
+    if(this.atkTimer>0||this.attacking)return null;
+    this.atkTimer=CFG.PLAYER.atkCooldown;
+    this.attacking=true;this.atkDuration=0.2;this.frameIdx=0;
+    const dir=this.facingRight?1:-1;
+    return {x:this.x+dir*30,y:this.y-5,w:this.getAtkRange(),h:40,damage:this.getAtk(),knockback:dir*5,color:this.getWeaponCfg().color};
+  }
+  skill(){
+    if(this.skillTimer>0||this.skilling)return null;
+    this.skillTimer=CFG.PLAYER.skillCooldown;
+    this.skilling=true;this.skillDuration=0.5;this.frameIdx=0;
+    const dir=this.facingRight?1:-1;
+    return {x:this.x+dir*35,y:this.y-15,w:this.getAtkRange()*1.5,h:60,damage:Math.floor(this.getAtk()*this.getSkillMul()),knockback:dir*10,color:'#ff6644',isSkill:true};
+  }
   takeDamage(dmg){if(this.invulnTimer>0)return;const def=DB.getDefense();this.hp-=Math.floor(dmg*(1-def/100));this.invulnTimer=0.3;this.hitFlash=0.15;this.vy=-3;if(this.hp<=0)this.hp=0;}
   pickupItem(category,itemId){DB.addItem(category,itemId);const items=EQUIP[category];const currentId=DB.getEquipped(category);const newIdx=items.findIndex(e=>e.id===itemId);const curIdx=currentId?items.findIndex(e=>e.id===currentId):-1;if(newIdx>curIdx)DB.equipItem(category,itemId);}
   
@@ -611,6 +625,7 @@ class Game{
     this.player.x=100;this.player.y=this.groundY-40;this.player.vx=0;this.player.vy=0;this.player.grounded=true;
     this.player.attacking=false;this.player.skilling=false;this.player.state='idle';
     this.player.atkTimer=0;this.player.skillTimer=0;this.player.frameIdx=0;
+    this.player.atkDuration=0;this.player.skillDuration=0;
     this.player.invulnTimer=0;this.player.hitFlash=0;
     this.camX=0;this.player.weapon=DB.data.weapon;
   }
