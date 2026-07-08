@@ -37,90 +37,16 @@ const Sprite={
       const check=()=>{loaded++;if(loaded>=total){this._loaded=true;resolve();}};
       for(const[k,src]of Object.entries(map)){
         const img=new Image();
-        img.onload=()=>{this._removeBg(k,img);check();};
-        img.onerror=check;img.src=src;
-        this._imgs[k]=img;
+        img.onload=()=>{this._imgs[k]=img;check();};
+        img.onerror=()=>{console.warn('sprite fail:',k,src);check();};
+        img.src=src;
       }
     });
     return this._loadPromise;
   },
   
-  // 从边缘泛洪填充去掉背景，保留中心人物
-  _removeBg(key,img){
-    try{
-      const w=img.naturalWidth,h=img.naturalHeight;
-      const c=document.createElement('canvas');c.width=w;c.height=h;
-      const ctx=c.getContext('2d');ctx.drawImage(img,0,0);
-      try{
-        const data=ctx.getImageData(0,0,w,h);
-        const px=data.data;
-        // 取四个角像素的平均值作为背景色
-        let bgR=0,bgG=0,bgB=0;
-        const corners=[[0,0],[w-1,0],[0,h-1],[w-1,h-1]];
-        for(const[sx,sy]of corners){
-          const si=(sy*w+sx)*4;
-          bgR+=px[si];bgG+=px[si+1];bgB+=px[si+2];
-        }
-        bgR=Math.round(bgR/4);bgG=Math.round(bgG/4);bgB=Math.round(bgB/4);
-        // 泛洪填充：从边缘像素开始，只去掉与背景色接近且连通到边缘的像素
-        const tol=25;
-        const visited=new Uint8Array(w*h);
-        const queue=[];
-        // 初始化：四条边上的像素
-        const addEdge=(x,y)=>{
-          const idx=y*w+x;
-          if(visited[idx])return;
-          const i=idx*4;
-          const dr=Math.abs(px[i]-bgR),dg=Math.abs(px[i+1]-bgG),db=Math.abs(px[i+2]-bgB);
-          if(dr<tol&&dg<tol&&db<tol){
-            visited[idx]=1;queue.push(x,y);px[i+3]=0;
-          }else{
-            visited[idx]=2; // 标记为"人物边缘"，不处理
-          }
-        };
-        for(let x=0;x<w;x++){addEdge(x,0);addEdge(x,h-1);}
-        for(let y=1;y<h-1;y++){addEdge(0,y);addEdge(w-1,y);}
-        // BFS 泛洪
-        let head=0;
-        while(head<queue.length){
-          const cx=queue[head++],cy=queue[head++];
-          for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
-            const nx=cx+dx,ny=cy+dy;
-            if(nx<0||nx>=w||ny<0||ny>=h)continue;
-            const idx=ny*w+nx;
-            if(visited[idx])continue;
-            const i=idx*4;
-            const dr=Math.abs(px[i]-bgR),dg=Math.abs(px[i+1]-bgG),db=Math.abs(px[i+2]-bgB);
-            if(dr<tol&&dg<tol&&db<tol){
-              visited[idx]=1;queue.push(nx,ny);px[i+3]=0;
-            }
-          }
-        }
-        // 边缘羽化：对已标记为背景的像素周围做渐变
-        for(let y=1;y<h-1;y++){
-          for(let x=1;x<w-1;x++){
-            const idx=y*w+x;
-            if(visited[idx]!==2)continue; // 只处理人物边缘像素
-            const i=idx*4;
-            const dr=Math.abs(px[i]-bgR),dg=Math.abs(px[i+1]-bgG),db=Math.abs(px[i+2]-bgB);
-            if(dr<tol*1.5&&dg<tol*1.5&&db<tol*1.5){
-              const dist=Math.max(dr,dg,db)/tol;
-              px[i+3]=Math.floor(255*(1-(dist-1)/0.5));
-            }
-          }
-        }
-        ctx.putImageData(data,0,0);
-        this._cleaned[key]=c;
-      }catch(e2){
-        this._cleaned[key]=c;
-      }
-    }catch(e){
-      this._cleaned[key]=null;
-    }
-  },
-  
-  // 返回抠底后的图片（fallback到原始图片）
-  get(key){return this._cleaned[key]||this._imgs[key]||null;}
+  // 直接返回原始图片，不做任何背景处理
+  get(key){return this._imgs[key]||null;}
 };
 
 // ==================== 配置 ====================
