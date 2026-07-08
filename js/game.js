@@ -4,9 +4,10 @@
 (function(){
 'use strict';
 
-// ==================== 精灵贴图系统（直接用原始PNG，零处理） ====================
+// ==================== 精灵贴图系统（自动抠背景） ====================
 const Sprite={
   _imgs:{},
+  _cleaned:{},
   _loaded:false,
   _loading:false,
   _loadPromise:null,
@@ -36,14 +37,58 @@ const Sprite={
       const check=()=>{loaded++;if(loaded>=total){this._loaded=true;resolve();}};
       for(const[k,src]of Object.entries(map)){
         const img=new Image();
-        img.onload=check;img.onerror=check;img.src=src;
+        img.onload=()=>{this._removeBg(k,img);check();};
+        img.onerror=check;img.src=src;
         this._imgs[k]=img;
       }
     });
     return this._loadPromise;
   },
-  // 直接返回原始图片，不做任何处理
-  get(key){return this._imgs[key]||null;}
+  
+  // 自动检测并去除背景色
+  _removeBg(key,img){
+    try{
+      const w=img.naturalWidth,h=img.naturalHeight;
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      const ctx=c.getContext('2d');ctx.drawImage(img,0,0);
+      try{
+        const data=ctx.getImageData(0,0,w,h);
+        const px=data.data;
+        // 采样四个角+四个边中点，取平均作为背景色
+        let bgR=0,bgG=0,bgB=0,samples=0;
+        const samplePts=[
+          [0,0],[w-1,0],[0,h-1],[w-1,h-1],
+          [Math.floor(w/2),0],[Math.floor(w/2),h-1],
+          [0,Math.floor(h/2)],[w-1,Math.floor(h/2)]
+        ];
+        for(const[sx,sy]of samplePts){
+          const si=(sy*w+sx)*4;
+          bgR+=px[si];bgG+=px[si+1];bgB+=px[si+2];samples++;
+        }
+        bgR=Math.round(bgR/samples);bgG=Math.round(bgG/samples);bgB=Math.round(bgB/samples);
+        // 把接近背景色的像素变透明（容差30）
+        const tol=30;
+        for(let i=0;i<px.length;i+=4){
+          const dr=Math.abs(px[i]-bgR),dg=Math.abs(px[i+1]-bgG),db=Math.abs(px[i+2]-bgB);
+          if(dr<tol&&dg<tol&&db<tol){
+            px[i+3]=0;
+          }else if(dr<tol*1.5&&dg<tol*1.5&&db<tol*1.5){
+            const dist=Math.max(dr,dg,db)/tol;
+            px[i+3]=Math.floor(255*(1-dist));
+          }
+        }
+        ctx.putImageData(data,0,0);
+        this._cleaned[key]=c;
+      }catch(e2){
+        this._cleaned[key]=c;
+      }
+    }catch(e){
+      this._cleaned[key]=null;
+    }
+  },
+  
+  // 返回抠底后的图片（fallback到原始图片）
+  get(key){return this._cleaned[key]||this._imgs[key]||null;}
 };
 
 // ==================== 配置 ====================
@@ -248,10 +293,18 @@ class Player{
       const scale=this.h/ih;
       const dw=Math.min(iw*scale,this.w);
       const dx=(this.w-dw)/2;
-      // 使用位移制造动画感，但图片本身不变
       const bob=this.state==='run'?Math.abs(Math.sin(this.frameIdx*0.8))*4:(this.state==='idle'?Math.sin(this.frameIdx*0.5)*2:0);
       const atkShift=this.state==='attack'?(Math.sin(this.frameIdx*1.2)*4):0;
       ctx.drawImage(img,sx+dx,sy+bob+atkShift,dw,this.h);
+      // 技能特效：旋转光环
+      if(this.state==='skill'){
+        ctx.globalAlpha=0.3+Math.sin(this.frameIdx*2)*0.2;
+        ctx.strokeStyle='#ffaa00';ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(this.x-camX,this.y-this.h*0.3,this.w*0.7,0,Math.PI*2);ctx.stroke();
+        ctx.strokeStyle='#ff6600';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.arc(this.x-camX,this.y-this.h*0.3,this.w*0.6+Math.sin(this.frameIdx*4)*8,0,Math.PI*2);ctx.stroke();
+        ctx.globalAlpha=1;
+      }
     }
     ctx.restore();
     this.drawHealthBar(ctx,camX);
@@ -364,8 +417,7 @@ class Enemy{
   draw(ctx,camX){
     if(this.fullyRemoved)return;
     let img;
-    if(this.dead)img=Sprite.get('enemyIdle');
-    else if(this.attacking)img=Sprite.get('enemyAttack');
+    if(this.attacking)img=Sprite.get('enemyAttack');
     else if(this.state==='patrol'||this.state==='chase'||this.state==='dodge')img=Sprite.get('enemyRun');
     else img=Sprite.get('enemyIdle');
     const sx=this.x-camX-this.w/2,sy=this.y-this.h/2;
@@ -470,6 +522,8 @@ class Boss extends Enemy{
     if(!this.facingRight){ctx.translate(this.x-camX,0);ctx.scale(-1,1);ctx.translate(-(this.x-camX),0);}
     if(this.stunned)ctx.globalAlpha=0.4+Math.sin(this.animTimer*10)*0.3;
     else if(this.hitFlash>0)ctx.globalAlpha=0.5;
+    // BOSS技能预警效果
+    if(this.skillWarning>0){ctx.globalAlpha=0.5+Math.sin(this.animTimer*15)*0.3;ctx.fillStyle='rgba(255,0,0,0.2)';ctx.beginPath();ctx.arc(this.x-camX,this.y,this.w*0.9,0,Math.PI*2);ctx.fill();}
     if(img&&img.complete&&img.naturalWidth>0){
       const iw=img.naturalWidth,ih=img.naturalHeight;
       const scale=this.h/ih;
