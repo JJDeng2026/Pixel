@@ -183,7 +183,11 @@ let score = 0, hp = 100, combo = 0, bestCombo = 0;
 let elapsed = 0, spawnTimer = 0, fireTimer = 0, invuln = 0, shake = 0;
 let lastPx = 0, lastPy = 0;
 const keys = {};
-let pointerTarget = null;
+let pointerTarget = { x:0, y:0 };
+let dragging = false;
+const dragOffset = new THREE.Vector2();
+const _v3 = new THREE.Vector3();
+const PLAYER_Z = 0;
 let camBaseX = 0, camBaseY = 5;
 
 const ENEMY_SCHEMES = [
@@ -231,7 +235,12 @@ function init(){
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', e => { keys[e.code] = false; });
+  const cv = renderer.domElement;
+  cv.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
+  cv.addEventListener('contextmenu', e=>e.preventDefault());
 
   animate();
 }
@@ -517,11 +526,11 @@ function updateGame(dt){
   if(keys['ArrowRight']|| keys['KeyD']) tX += 28*dt;
   if(keys['ArrowUp']   || keys['KeyW']) tY += 24*dt;
   if(keys['ArrowDown'] || keys['KeyS']) tY -= 24*dt;
-  if(pointerTarget){ tX = pointerTarget.x; tY = pointerTarget.y; }
+  if(dragging){ tX = pointerTarget.x; tY = pointerTarget.y; }
   tX = Math.max(-5, Math.min(5, tX));
   tY = Math.max(-7,  Math.min(7,  tY));
-  player.position.x += (tX - player.position.x)*0.22;
-  player.position.y += (tY - player.position.y)*0.22;
+  player.position.x += (tX - player.position.x)*0.30;
+  player.position.y += (tY - player.position.y)*0.30;
 
   // bank the ship
   const vx = player.position.x - lastPx, vy = player.position.y - lastPy;
@@ -680,7 +689,7 @@ function resetGame(){
   score = 0; hp = 100; combo = 0; bestCombo = 0;
   elapsed = 0; spawnTimer = 0; fireTimer = 0; invuln = 0; shake = 0;
   player.position.set(0, 0, 0); player.rotation.set(0,0,0); player.visible = true;
-  lastPx = 0; lastPy = 0;
+  lastPx = 0; lastPy = 0; dragging = false;
   updateHUD(); hideCombo();
 }
 function startGame(){
@@ -713,15 +722,37 @@ function bindUI(){
 }
 function onKeyDown(e){
   keys[e.code] = true;
-  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD'].includes(e.code)) pointerTarget = null;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD'].includes(e.code)) dragging = false;
   if(e.code === 'Space'){ e.preventDefault(); if(state !== 'playing') startGame(); }
 }
-function onPointerMove(e){
+// map a screen point to the player's Z plane in world space
+function screenToWorld(cx, cy){
   const s = document.getElementById('stage');
   const r = s.getBoundingClientRect();
-  const nx = ((e.clientX - r.left)/r.width)*2 - 1;
-  const ny = -(((e.clientY - r.top)/r.height)*2 - 1);
-  pointerTarget = { x: nx*5, y: ny*6.5 };
+  const nx = ((cx - r.left)/r.width)*2 - 1;
+  const ny = -(((cy - r.top)/r.height)*2 - 1);
+  _v3.set(nx, ny, 0.5).unproject(camera);
+  _v3.sub(camera.position).normalize();
+  const dist = (PLAYER_Z - camera.position.z) / _v3.z;
+  _v3.multiplyScalar(dist).add(camera.position);
+  return _v3;
+}
+function onPointerDown(e){
+  if(state !== 'playing') return;            // start / over screens handled in bindUI
+  dragging = true;
+  try{ renderer.domElement.setPointerCapture(e.pointerId); }catch(_){}
+  const w = screenToWorld(e.clientX, e.clientY);
+  dragOffset.set(player.position.x - w.x, player.position.y - w.y); // grab offset => no jump
+}
+function onPointerMove(e){
+  if(state !== 'playing' || !dragging) return;
+  const w = screenToWorld(e.clientX, e.clientY);
+  pointerTarget.x = THREE.MathUtils.clamp(w.x + dragOffset.x, -5, 5);
+  pointerTarget.y = THREE.MathUtils.clamp(w.y + dragOffset.y, -7, 7);
+}
+function onPointerUp(e){
+  dragging = false;
+  try{ renderer.domElement.releasePointerCapture(e.pointerId); }catch(_){}
 }
 function onResize(){
   const ss = stageSize();
